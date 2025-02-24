@@ -2,35 +2,20 @@
 # Email: payam.sadeghishabestari@uzh.ch
 
 import warnings
-import os
 from pathlib import Path
-from ast import literal_eval
 from tqdm import tqdm
 import time
+
 import numpy as np
 from scipy.signal import find_peaks
 import matplotlib.pyplot as plt
-import customtkinter as ctk
 
-from mne_icalabel import label_components
 from mne.coreg import Coregistration
 from mne.datasets import fetch_fsaverage
-from mne.io import read_raw_brainvision, read_raw_fif
-from mne.channels import read_dig_captrak, make_standard_montage
-from mne.minimum_norm import make_inverse_operator, apply_inverse
-from mne.viz import plot_projs_joint
-from mne.preprocessing import (annotate_muscle_zscore,
-                                ICA,
-                                create_eog_epochs,
-                                create_ecg_epochs,
-                                compute_proj_ecg,
-                                compute_proj_eog,
-                                find_bad_channels_lof
-                                )
+from mne.io import read_raw_fif
+from mne.minimum_norm import make_inverse_operator, apply_inverse, write_inverse_operator
 from mne import (set_log_level,
                 events_from_annotations,
-                concatenate_raws,
-                make_fixed_length_epochs,
                 Epochs,
                 setup_source_space,
                 make_bem_model,
@@ -39,16 +24,15 @@ from mne import (set_log_level,
                 compute_covariance,
                 read_labels_from_annot,
                 extract_label_time_course,
-                open_report,
-                Report
+                open_report
                 )
 
 
 def run_erp_analysis(
         subject_id,
         subjects_dir=None,
-        paradigm="rest",
-        analysis_type="sensor",
+        paradigm="gpias",
+        source_analysis=True,
         events=None,
         mri=False,
         subjects_fs_dir=None,
@@ -131,41 +115,17 @@ def run_erp_analysis(
 
     fname = subjects_dir / subject_id / "EEG" / paradigm / "raw_prep.fif"
     raw = read_raw_fif(fname, preload=True)
+    info = raw.info
     
-
     ## check paradigms
-    if events == None:
-
+    if events is None:
         events, event_ids = events_from_annotations(raw)
         if "New Segment/" in event_ids: 
             events = events[events[:, 2] != event_ids["New Segment/"]]
             event_ids.pop("New Segment/")
 
         match paradigm:
-            case "rest":
-                thr = 30 * 250 # 30 seconds
-                events = events[np.where(np.diff(events[:, 0], prepend=-np.inf) < thr)[0]]
-                unique_ids, counts = np.unique(events[:, -1], return_counts=True)
-                keep_ids = unique_ids[counts > 1]
-                events = events[np.isin(events[:, -1], keep_ids)]
-                
-                raws_eo, raws_ec = [], []
-                for event_idx, event in enumerate(events[::2, 0]):
-                    if not event == events[-1][0]:
-                        tmin, tmax = event / 250, events[event_idx + 1][0] / 250
-                        raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
-                for event_idx, event in enumerate(events[1::2, 0]):
-                    if not event == events[-1][0]:
-                        tmin, tmax = event / 250, events[event_idx + 1][0] / 250
-                        raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
-                
-                epochs_eo, epochs_ec = [make_fixed_length_epochs(
-                                                                concatenate_raws(raw_e),
-                                                                duration=2
-                                                                ) for raw_e in [raws_eo, raws_ec]]
-
             case "gpias":
-
                 shift = 0.012 # 0.016
                 stims, stim_ids = events, event_ids
                 stim_ids = {
@@ -175,10 +135,8 @@ def run_erp_analysis(
                             'gap8': 4,
                             'gappost': 5,
                             }
-                
                 events = []
                 for stim_idx, stim in enumerate(stims):
-
                     ## split recording into blocks
                     start = stim[0]
                     if stim_idx == len(stims) - 1:
@@ -207,130 +165,110 @@ def run_erp_analysis(
     
     tqdm.write("Creating epochs...\n")
     progress.update(1)
-    
-    if not paradigm == "rest":
-        epochs = Epochs(raw=raw,
-                            events=events,
-                            event_id=event_ids,
-                            tmin=-0.2,
-                            tmax=0.5,
-                            reject_by_annotation=True,
-                            baseline=baseline
-                            )
+    epochs = Epochs(raw=raw,
+                    events=events,
+                    event_id=event_ids,
+                    tmin=-0.2,
+                    tmax=0.5,
+                    reject_by_annotation=True,
+                    baseline=baseline
+                    )
+    del raw
 
-    
     ## check manual_data_scroll
     if manual_data_scroll:
-        if paradigm == "rest":
-            epochs_eo.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
-            epochs_ec.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
-        else:
-            epochs.plot(n_channels=80, picks="eeg", events=events, scalings=dict(eeg=50e-6), block=True)
+        epochs.plot(n_channels=80, picks="eeg", events=events, scalings=dict(eeg=50e-6), block=True)
 
     ## save epochs
     tqdm.write("Computing Evoked objects and saving it...\n")
     progress.update(1)
 
-    if paradigm == "rest":
-        if saving_dir == None:
-            [epochs.save(fname=subjects_dir / subject_id / "EEG" / f"{paradigm}" / f"epochs-{title}-epo.fif") \
-                                                for epochs, title in zip([epochs_eo, epochs_ec], ["eo", "ec"])] 
-        else:
-            epochs.save(fname=saving_dir / "epochs-epo.fiff")
-            [epochs.save(fname=saving_dir / f"epochs-{title}-epo.fif") \
-                                                for epochs, title in zip([epochs_eo, epochs_ec], ["eo", "ec"])] 
-            
-        ## add source for rest
+    if saving_dir == None:
+        saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
 
-    else:
-        if saving_dir == None:
-            epochs.save(fname=subjects_dir / subject_id / "EEG" / f"{paradigm}" / "epochs-epo.fif")
-        else:
-            epochs.save(fname=saving_dir / "epochs-epo.fiff")
+    epochs.save(fname=saving_dir / "epochs-epo.fiff")
 
-    if not paradigm == "rest":
-        ## compute evokeds
-        evs = epochs.average(by_event_type=True)
+    ## compute evokeds
+    evs = epochs.average(by_event_type=True)
+    [ev.save(subjects_dir / subject_id / "EEG" / f"{paradigm}" / f"{ev.comment}-evo.fif") for ev in evs]
 
-        ## check type
-        if analysis_type == "sensor":
-            [ev.save(subjects_dir / subject_id / "EEG" / f"{paradigm}" / f"{ev.comment}-evo.fif") for ev in evs]
+    ## source analysis
+    if source_analysis:
+        if len(raw.info["projs"]) == 0:
+            raw.set_eeg_reference("average", projection=True)
 
-        if analysis_type == "source":
-            if len(raw.info["projs"]) == 0:
-                raw.set_eeg_reference("average", projection=True)
-
-            if mri:
-                kwargs = {"subject": subject_id,
-                        "subjects_dir": subjects_fs_dir
-                        }
-                
-                brain_labels = read_labels_from_annot(parc="aparc", **kwargs)
-                tqdm.write("Setting up bilateral hemisphere surface-based source space with subsampling ...\n")
-                progress.update(1)
-                src = setup_source_space(**kwargs)
-
-                tqdm.write("Creating a BEM model for subject ...\n")
-                progress.update(1)
-                bem_model = make_bem_model(**kwargs)  
-                bem = make_bem_solution(bem_model)
-
-                tqdm.write("Coregistering MRI with a subjects head shape ...\n")
-                progress.update(1)
-                coreg = Coregistration(evs.info, subject_id, subjects_fs_dir, fiducials='auto')
-                coreg.fit_fiducials()
-                coreg.fit_icp(n_iterations=40, nasion_weight=2.0) 
-                coreg.omit_head_shape_points(distance=5.0 / 1000)
-                coreg.fit_icp(n_iterations=40, nasion_weight=10)
-                trans = coreg.trans
-
-            else:    
-                tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
-                progress.update(1)
-                kwargs = {"subject": "fsaverage",
-                        "subjects_dir": None,
-                        }
-                fs_dir = fetch_fsaverage()
-                trans = subject_id
-                fname_src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
-                bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
-                brain_labels = read_labels_from_annot(parc="aparc", **kwargs)
-
-            tqdm.write("Computing forward solution ...\n")
+        if mri:
+            kwargs = {"subject": subject_id,
+                    "subjects_dir": subjects_fs_dir
+                    }
+            tqdm.write("Setting up bilateral hemisphere surface-based source space with subsampling ...\n")
             progress.update(1)
-            fwd = make_forward_solution(evs.info,
-                                        trans=trans,
-                                        src=fname_src,
-                                        bem=bem,
-                                        meg=False,
-                                        eeg=True
-                                        )
+            src = setup_source_space(**kwargs)
 
-            tqdm.write("Estimating the noise covariance of the recording ...\n")
+            tqdm.write("Creating a BEM model for subject ...\n")
             progress.update(1)
+            bem_model = make_bem_model(**kwargs)  
+            bem = make_bem_solution(bem_model)
+
+            tqdm.write("Coregistering MRI with a subjects head shape ...\n")
+            progress.update(1)
+            coreg = Coregistration(evs.info, subject_id, subjects_fs_dir, fiducials='auto')
+            coreg.fit_fiducials()
+            coreg.fit_icp(n_iterations=40, nasion_weight=2.0) 
+            coreg.omit_head_shape_points(distance=5.0 / 1000)
+            coreg.fit_icp(n_iterations=40, nasion_weight=10)
+            trans = coreg.trans
+            brain_labels = read_labels_from_annot(parc="aparc", **kwargs)
+
+        else:    
+            tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
+            progress.update(1)
+            kwargs = {"subject": "fsaverage",
+                    "subjects_dir": None,
+                    }
+            fs_dir = fetch_fsaverage()
+            trans = fs_dir / "bem" / "fsaverage-trans.fif"
+            src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
+            bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
+            brain_labels = read_labels_from_annot(parc="aparc", **kwargs)[:-1]
+
+        tqdm.write("Computing forward solution ...\n")
+        progress.update(1)
+        fwd = make_forward_solution(evs.info,
+                                    trans=trans,
+                                    src=src,
+                                    bem=bem,
+                                    meg=False,
+                                    eeg=True
+                                    )
+
+        tqdm.write("Estimating the noise covariance of the recording ...\n")
+        progress.update(1)
+        if paradigm == "gpias":
+            po_stims = [key for key in event_ids.keys() if key.startswith("PO")]
+            noise_cov = compute_covariance(epochs[po_stims])
+        else:
             noise_cov = compute_covariance(epochs)
 
-            ## add a condition for GPIAS to use ad hoc noise covariance
-            
-            tqdm.write("Computing the minimum-norm inverse solution ...\n")
-            progress.update(1)
-            inverse_operator = make_inverse_operator(evs.info,
-                                                    fwd,
-                                                    noise_cov
-                                                    )
-            
-            tqdm.write("Apply inverse solution and extract label time courses...\n")
-            progress.update(1)
-            stcs = [apply_inverse(ev, inverse_operator) for ev in evs]
-            label_ts = extract_label_time_course(stcs,
-                                                brain_labels,
-                                                inverse_operator["src"],
-                                                mode="mean", # be cautious
-                                                allow_empty=True
+        tqdm.write("Computing the minimum-norm inverse solution ...\n")
+        progress.update(1)
+        inverse_operator = make_inverse_operator(evs.info,
+                                                fwd,
+                                                noise_cov
                                                 )
-            
-            fname_label_ts = subjects_dir / subject_id / "EEG" / f"{paradigm}" / "labels_ts.npy"
-            np.save(fname_label_ts, np.array(label_ts)) # shape: (n_evs, n_labels, n_times)
+        write_inverse_operator(fname=saving_dir / "operator-inv.fif",
+                                inv=inverse_operator)
+        
+        tqdm.write("Apply inverse solution and extract label time courses...\n")
+        progress.update(1)
+        stcs = [apply_inverse(ev, inverse_operator) for ev in evs]
+        label_ts = extract_label_time_course(stcs,
+                                            brain_labels,
+                                            inverse_operator["src"],
+                                            mode="mean", # be cautious
+                                            allow_empty=True
+                                            )
+        np.save(saving_dir / "labels_ts.npy", np.array(label_ts)) # shape: (n_evs, n_labels, n_times)
 
         ## create a report
         if create_report:
@@ -347,29 +285,23 @@ def run_erp_analysis(
                 report.add_figure(fig=fig_ev, title="Evoked Response", image_format="PNG")
 
             ## source space
-            if analysis_type == "source":
-                report.add_bem(subject=subject_id,
-                            subjects_dir=subjects_dir,
-                            title="MRI & BEM",
-                            decim=10,
-                            width=512)
-                report.add_trans(trans=coreg.trans,
-                                info=raw.info,
-                                subject=subject_id,
-                                subjects_dir=subjects_dir,
-                                title="Co-registration")
-        
-        ## saving
-        if saving_dir == None:
-            report.save(fname=f"{fname_report[:-3]}.html", open_browser=False, overwrite=True)
-        else:
-            report.save(fname=saving_dir / f"{paradigm}.html", open_browser=False, overwrite=True)
+            if source_analysis:
+                report.add_bem(title="MRI & BEM",
+                                decim=10,
+                                width=512,
+                                **kwargs
+                                )
+                report.add_trans(trans=trans,
+                                info=info,
+                                title="Co-registration",
+                                **kwargs
+                                )
+            ## saving
+            report.save(fname=f"{fname_report.as_posix()[:-3]}.html", open_browser=False, overwrite=True)
 
     tqdm.write("Analysis finished successfully!\n")
     progress.update(1)
     progress.close()
-
-
 
 
 def _detect_gpias_events(
@@ -406,7 +338,6 @@ def _detect_gpias_events(
                     }
     match stim_key:
         case "gappre" | "gappost":
-            
             height_limits = {
                             "PO70": [300, 650],
                             "PO75": [650, 1100],
@@ -415,7 +346,6 @@ def _detect_gpias_events(
                             "PO90": [1900, 3000],
                             }
         case "gapbbn" | "gap3" | "gap8":
-            
             height_limits = {
                             "PO": [1700, 3000],
                             "GO": [300, 900],
@@ -424,7 +354,7 @@ def _detect_gpias_events(
     
     events = _detect_peaks(pk_heights, peak_idxs, stim_ch, times, height_limits, events_dict, stim_key, plot_peaks=plot_peaks)
     
-    return events
+    return events, events_dict
 
 
 def _detect_peaks(pk_heights,

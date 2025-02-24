@@ -96,27 +96,27 @@ so now error is again illegal hardware instruction which is probably due to TF. 
 #### cerebellum parcelation
 
 # Step 1: Upsample Buckner atlas from 2mm to 1mm resolution (matching MNI152 1mm template)
-mri_vol2vol --mov ${BUCKNER_ATLAS} \
-            --targ ${SUBJECTS_DIR}/${MNI_SUBJECT_ID}/mri/norm.mgz \
+mri_vol2vol --mov Buckner_atlas.nii.gz \
+            --targ MNI152/mri/norm.mgz \
             --regheader \
-            --o ${OUTPUT_DIR}/Buckner_atlas1mm.nii.gz \
+            --o Buckner_atlas1mm.nii.gz \
             --no-save-reg \
             --interp nearest
 
 # Step 2: Warp the upsampled atlas to FreeSurfer's nonlinear volumetric space
-mri_vol2vol --mov ${OUTPUT_DIR}/Buckner_atlas1mm.nii.gz \
-            --s ${MNI_SUBJECT_ID} \
-            --targ $FREESURFER_HOME/average/mni305.cor.mgz \
-            --m3z ${SUBJECTS_DIR}/${MNI_SUBJECT_ID}/mri/transforms/talairach.m3z \
-            --o ${OUTPUT_DIR}/Buckner_atlas_freesurfer_internal_space.nii.gz \
-            --interp nearest
+mri_vol2vol_used --mov Buckner_atlas1mm.nii.gz \
+                 --s MNI152_FS \
+                 --targ $FREESURFER_HOME/average/mni305.cor.mgz \
+                 --m3z talairach.m3z \
+                 --o Buckner_atlas_freesurfer_internal_space.nii.gz \
+                 --interp nearest
 
 # Step 3: Warp the atlas from FreeSurfer internal space to subject’s native space
-mri_vol2vol --mov ${SUBJECTS_DIR}/${SUBJECT_ID}/mri/norm.mgz \
-            --s ${SUBJECT_ID} \
-            --targ ${OUTPUT_DIR}/Buckner_atlas_freesurfer_internal_space.nii.gz \
-            --m3z ${SUBJECTS_DIR}/${SUBJECT_ID}/mri/transforms/talairach.m3z \
-            --o ${OUTPUT_DIR}/Buckner_atlas_subject.nii.gz \
+mri_vol2vol --mov $SUBJECTS_DIR/SUBJECT_FS/mri/norm.mgz \
+            --s SUBJECT_FS \
+            --targ Buckner_atlas_freesurfer_internal_space.nii.gz \
+            --m3ztalairach.m3z \
+            --o Buckner_atlas_subject.nii.gz \
             --interp nearest \
             --inv-morph
 
