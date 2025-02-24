@@ -1,7 +1,6 @@
 # Written by Payam S. Shabestari, Zurich, 01.2025 
 # Email: payam.sadeghishabestari@uzh.ch
 
-
 import os
 from pathlib import Path
 from ast import literal_eval
@@ -10,6 +9,7 @@ import time
 import matplotlib.pyplot as plt
 import customtkinter as ctk
 
+from mne import set_log_level, Report
 from mne_icalabel import label_components
 from mne.io import read_raw_brainvision
 from mne.channels import read_dig_captrak, make_standard_montage
@@ -20,11 +20,6 @@ from mne.preprocessing import (ICA,
                                 compute_proj_ecg,
                                 compute_proj_eog
                                 )
-from mne import (set_log_level,
-                Annotations,
-                Report
-                )
-
 
 def preprocessing(
         subject_id,
@@ -140,16 +135,21 @@ def preprocessing(
     ## resampling, filtering and re-referencing 
     tqdm.write("Resampling, filtering and re-referencing ...\n")
     progress.update(1)
-    l_freq, h_freq = 1, 40
     raw.resample(sfreq=250, stim_picks=None)
+
+    if paradigm.startswith("rest"):
+        l_freq, h_freq = 0.1, 100
+        raw.notch_filter(freqs=50, picks="eeg")
+    else:
+        l_freq, h_freq = 1, 40
+
     raw.filter(picks="eeg", l_freq=l_freq, h_freq=h_freq)
     raw.set_eeg_reference("average", projection=True)
     raw.apply_proj()
     
     ## eeg plotting for annotating
     if manual_data_scroll:
-        annot = Annotations(onset=0, duration=0, description="bad_segment")
-        raw.set_annotations(annot)
+        raw.annotations.append(onset=0, duration=0, description="bad_segment")
         raw.plot(duration=20.0, n_channels=80, picks="eeg", scalings=dict(eeg=40e-6), block=True)
 
     ## ICA
@@ -204,9 +204,7 @@ def preprocessing(
                                                 picks=eog_indices,
                                                 show=False,
                                                 )
-            
         ica.apply(raw, exclude=eog_indices)
-    
     
     if pulse_correct:
         tqdm.write("Finding and removing ECG related components...\n")
@@ -220,10 +218,8 @@ def preprocessing(
                                     l_freq=1,
                                     h_freq=20,
                                     ).average(picks="all")
-
         ## compute and apply projection
         ecg_projs, _ = compute_proj_ecg(raw, n_eeg=2, reject=None)
-
 
     if eog_correct:
         tqdm.write("Finding and removing vertical and horizontal EOG components...\n")
@@ -232,7 +228,7 @@ def preprocessing(
         ## vertical
         ev_eog = create_eog_epochs(raw, ch_name=["PO7", "PO8"]).average(picks="all")
         ev_eog.apply_baseline((None, None))
-        veog_projs, _ = compute_proj_eog(raw, n_eeg=1, reject=None)
+        veog_projs, _ = compute_proj_eog(raw, n_eeg=2, reject=None)
 
         ## horizontal
         ica = ICA(n_components=0.97, max_iter=800, method='infomax', fit_params=dict(extended=True))        
@@ -297,18 +293,13 @@ def preprocessing(
                 report.add_figure(fig=eog_sac_components, title="EOG Saccade Components", image_format="PNG")
 
         if saving_dir == None:
-            fname_report = subjects_dir / subject_id / "EEG" / "reports" / f"{paradigm}.h5"
-            report.save(fname=fname_report, open_browser=False, overwrite=True)
-        else:
-            report.save(fname=saving_dir / f"{paradigm}.h5", open_browser=False, overwrite=True)
+            saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
+        report.save(fname=saving_dir.parent / "reports" / f"{paradigm}.h5", open_browser=False, overwrite=True)
 
-    if not saving_dir==False:
-        if saving_dir == None:
-            raw.save(fname=subjects_dir / subject_id / "EEG" / f"{paradigm}" / "raw_prep.fif")
-        else:
-            raw.save(fname=saving_dir / "raw_prep.fif")
-
-    tqdm.write("EEG data were preprocessed sucessfully!\n")
+    if not saving_dir is False:
+        raw.save(fname=saving_dir / "raw_prep.fif")
+        
+    tqdm.write("\033[32mEEG data were preprocessed sucessfully!\n")
     progress.update(1)
     progress.close()
 

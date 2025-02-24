@@ -93,7 +93,7 @@ def run_erp_analysis(
         """
     
     set_log_level(verbose=verbose)
-    progress = tqdm(total=5,
+    progress = tqdm(total=9,
                     desc="",
                     ncols=50,
                     colour="cyan",
@@ -149,12 +149,12 @@ def run_erp_analysis(
                                                     return_times=True)
                     stim_ch = np.squeeze(stim_ch)
                     stim_id = stim[2]
-                    stim_key = [key for key, value in stim_ids.items() if value == stim_id][0]
+                    stim_key = [key for key, value in stim_ids.items() if value == stim_id - 1][0] # maybe later better write it
                     evs, event_ids = _detect_gpias_events(stim_ch, times, stim_key)
                     events.append(evs)
                 
                 events = np.concatenate(events, axis=0)
-                events[:, 0] = events[:, 0] - shift * raw.info["sfreq"]
+                events[:, 0] = events[:, 0] - shift * info["sfreq"]
                 baseline = None
             
             case "omi" | "xxxxx" | "xxxxy":
@@ -186,15 +186,15 @@ def run_erp_analysis(
     if saving_dir == None:
         saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
 
-    epochs.save(fname=saving_dir / "epochs-epo.fiff")
+    epochs.save(fname=saving_dir / "epochs-epo.fiff", overwrite=True)
 
     ## compute evokeds
     evs = epochs.average(by_event_type=True)
-    [ev.save(subjects_dir / subject_id / "EEG" / f"{paradigm}" / f"{ev.comment}-evo.fif") for ev in evs]
+    [ev.save(saving_dir / f"{ev.comment}-evo.fif", overwrite=True) for ev in evs]
 
     ## source analysis
     if source_analysis:
-        if len(raw.info["projs"]) == 0:
+        if len(info["projs"]) == 0:
             raw.set_eeg_reference("average", projection=True)
 
         if mri:
@@ -212,7 +212,7 @@ def run_erp_analysis(
 
             tqdm.write("Coregistering MRI with a subjects head shape ...\n")
             progress.update(1)
-            coreg = Coregistration(evs.info, subject_id, subjects_fs_dir, fiducials='auto')
+            coreg = Coregistration(info, subject_id, subjects_fs_dir, fiducials='auto')
             coreg.fit_fiducials()
             coreg.fit_icp(n_iterations=40, nasion_weight=2.0) 
             coreg.omit_head_shape_points(distance=5.0 / 1000)
@@ -234,7 +234,7 @@ def run_erp_analysis(
 
         tqdm.write("Computing forward solution ...\n")
         progress.update(1)
-        fwd = make_forward_solution(evs.info,
+        fwd = make_forward_solution(info,
                                     trans=trans,
                                     src=src,
                                     bem=bem,
@@ -252,24 +252,12 @@ def run_erp_analysis(
 
         tqdm.write("Computing the minimum-norm inverse solution ...\n")
         progress.update(1)
-        inverse_operator = make_inverse_operator(evs.info,
+        inverse_operator = make_inverse_operator(info,
                                                 fwd,
                                                 noise_cov
                                                 )
         write_inverse_operator(fname=saving_dir / "operator-inv.fif",
                                 inv=inverse_operator)
-        
-        tqdm.write("Apply inverse solution and extract label time courses...\n")
-        progress.update(1)
-        stcs = [apply_inverse(ev, inverse_operator) for ev in evs]
-        label_ts = extract_label_time_course(stcs,
-                                            brain_labels,
-                                            inverse_operator["src"],
-                                            mode="mean", # be cautious
-                                            allow_empty=True
-                                            )
-        np.save(saving_dir / "labels_ts.npy", np.array(label_ts)) # shape: (n_evs, n_labels, n_times)
-
         ## create a report
         if create_report:
             tqdm.write("Creating report...\n")
@@ -299,7 +287,7 @@ def run_erp_analysis(
             ## saving
             report.save(fname=f"{fname_report.as_posix()[:-3]}.html", open_browser=False, overwrite=True)
 
-    tqdm.write("Analysis finished successfully!\n")
+    tqdm.write("\033[32mAnalysis finished successfully!\n")
     progress.update(1)
     progress.close()
 
@@ -353,9 +341,7 @@ def _detect_gpias_events(
                             }   
     
     events = _detect_peaks(pk_heights, peak_idxs, stim_ch, times, height_limits, events_dict, stim_key, plot_peaks=plot_peaks)
-    
     return events, events_dict
-
 
 def _detect_peaks(pk_heights,
                 peak_idxs,
@@ -373,19 +359,19 @@ def _detect_peaks(pk_heights,
         ax.set_title(stim_key)
         
     for key, (lower, upper) in height_limits.items():
-            pk_idxs = np.where((pk_heights >= lower) & (pk_heights < upper))[0]
-            sub_events = np.zeros(shape=(len(pk_idxs), 3), dtype=int)
-            sub_events[:, 0] = times[peak_idxs[pk_idxs]] * 250
-            sub_events[:, 1] = 0
-            sub_events[:, 2] = events_dict[f"{key[:4]}_{stim_key[3:]}"]
-            events.append(sub_events) 
+        pk_idxs = np.where((pk_heights >= lower) & (pk_heights < upper))[0]
+        sub_events = np.zeros(shape=(len(pk_idxs), 3), dtype=int)
+        sub_events[:, 0] = times[peak_idxs[pk_idxs]] * 250
+        sub_events[:, 1] = 0
+        sub_events[:, 2] = events_dict[f"{key[:4]}_{stim_key[3:]}"]
+        events.append(sub_events) 
 
-            if plot_peaks:
-                ax.scatter(times[peak_idxs[pk_idxs]], pk_heights[pk_idxs])
+        if plot_peaks:
+            ax.scatter(times[peak_idxs[pk_idxs]], pk_heights[pk_idxs])
 
-            if not len(pk_idxs) in [25, 100]:
-                warnings.warn(f"\033[91mThe number of detected triggeres for {key} in {stim_key} is " \
-                                "not as expected (25 or 100), its {len(pk_idxs)}, try adjusting the threshold!", UserWarning) 
+        if not len(pk_idxs) in [25, 100]:
+            warnings.warn(f"\033[91mThe number of detected triggeres for {key} in {stim_key} is " \
+                            "not as expected (25 or 100), its {len(pk_idxs)}, try adjusting the threshold!", UserWarning) 
             
     return np.concatenate(np.array(events), axis=0) 
 
