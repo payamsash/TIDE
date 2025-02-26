@@ -118,7 +118,20 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir):
     Creates EEG folder structure
     """
 
-    eeg_subfolders = ["gpias", "rest_v1", "rest_v2", "xxxxx", "xxxxy", "omi", "regularity", "reports", "captrack"]
+    eeg_subfolders = [
+                    "gpias",
+                    "rest.",
+                    "rest_v2",
+                    "xxxxx",
+                    "xxxxy",
+                    "omi",
+                    "regularity",
+                    "audiobook",
+                    "movie"
+                    "reports",
+                    "captrack"
+                    ]
+    
     [os.makedirs(subject_dir / "EEG" / subfolder, exist_ok=True) for subfolder in eeg_subfolders]
     dest_paths = {paradigm: subject_dir / "EEG" / paradigm for paradigm in eeg_subfolders[:-2]}
 
@@ -128,6 +141,9 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir):
             for paradigm in eeg_subfolders[:-2]:
                 if f"_{paradigm}." in fname and not dest_paths[paradigm].exists():
                     shutil.copy(eeg_dir / fname, subject_dir / "EEG" / paradigm)
+
+    ## only for rest. -> rest_v1
+    shutil.move(subject_dir / "EEG" / "rest.", subject_dir / "EEG" / "rest_v1")
 
     ## captrack data
     fnames = os.listdir(captrack_dir)
