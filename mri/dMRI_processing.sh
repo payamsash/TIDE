@@ -9,6 +9,9 @@
 ## chmod +x sMRI_processing.sh
 ## ./dMRI_processing.sh [args]
 ## echo sth >> log.txt
+## put echos
+## good comments
+## put look up tables of schaefer here ->
 
 set -e
 display_usage() {
@@ -34,6 +37,9 @@ saving_dir=$3
 raw_dwi="$subjects_dir/$subject_id/dMRI/raw_dwi.rec"
 raw_anat="$subjects_dir/$subject_id/sMRI/raw_anat.nii"
 default_saving_dir="/home/ubuntu/data/subjects_mrtrix_dir/$subject"
+fs_dir="/usr/local/freesurfer/8.0.0"
+luts_dir="/usr/local/mrtrix3/share/mrtrix3/labelconvert" # should be updated
+
 
 
 
@@ -74,22 +80,45 @@ echo -e "\e[32mCSD is done successfuly!"
 ### Quantitive Structural Connectivity
 mrconvert $raw_anat raw_anat.mif
 5ttgen fsl raw_anat.mif 5tt_nocoreg.mif
-dwiextract dwi_den_preproc_unbiased.mif mean_b0.mif -bzero # since we have only one b0, mrmath part is not necessary
+dwiextract dwi_den_preproc_unbiased.mif mean_b0.mif -bzero
 mrconvert mean_b0.mif mean_b0.nii.gz
 mrconvert 5tt_nocoreg.mif 5tt_nocoreg.nii.gz
 fslroi 5tt_nocoreg.nii.gz 5tt_vol0.nii.gz 0 1 
-flirt -in mean_b0.nii.gz -ref 5tt_vol0.nii.gz -interp nearestneighbour -dof 6 -omat diff2struct_fsl.mat
+
+flirt -in mean_b0.nii.gz -ref 5tt_vol0.nii.gz -interp nearestneighbour \
+                                                    -dof 6 \
+                                                    -omat diff2struct_fsl.mat
+
 transformconvert diff2struct_fsl.mat mean_b0.nii.gz 5tt_nocoreg.nii.gz flirt_import diff2struct_mrtrix.txt
 mrtransform 5tt_nocoreg.mif -linear diff2struct_mrtrix.txt -inverse 5tt_coreg.mif
 5tt2gmwmi 5tt_coreg.mif gmwmSeed_coreg.mif
 
-## remaining from here
+tckgen -act 5tt_coreg.mif -backtrack -seed_gmwmi gmwmSeed_coreg.mif \
+                                                    -select 10000000 \
+                                                    wmfod_norm.mif \
+                                                    tracks_10M.tck
 
-tckgen -act 5tt_coreg.mif -backtrack -seed_gmwmi gmwmSeed_coreg.mif -nthreads 8 -maxlength 250 -cutoff 0.06 -select 10000000 wmfod_norm.mif tracks_10M.tck
 tckedit tracks_10M.tck -number 200k smallerTracks_200k.tck
-tcksift2 -act 5tt_coreg.mif -out_mu sift_mu.txt -out_coeffs sift_coeffs.txt -nthreads 8 tracks_10M.tck wmfod_norm.mif sift_1M.txt
-labelconvert $FREESURFER_HOME/subjects/${SUB_ID}/mri/aparc+aseg.mgz $FREESURFER_HOME/FreeSurferColorLUT.txt /usr/local/mrtrix3/share/mrtrix3/labelconvert/fs_default.txt ${SUB_ID}_parcels_aparc.mif
-labelconvert $FREESURFER_HOME/subjects/${SUB_ID}/mri/aparc+aseg.mgz $FREESURFER_HOME/FreeSurferColorLUT.txt /usr/local/mrtrix3/share/mrtrix3/labelconvert/fs_a2009s.txt ${SUB_ID}_parcels_aparc2009.mif
+tcksift2 -act 5tt_coreg.mif -out_mu sift_mu.txt -out_coeffs sift_coeffs.txt
+                                                    tracks_10M.tck \
+                                                    wmfod_norm.mif \
+                                                    sift_1M.txt
+
+## Create a Connectome for Different Atlases
+
+# aparc atlases (84 & 164)
+labelconvert $fs_dir/subjects/$subject_id/mri/aparc+aseg.mgz \ 
+                                                    $fs_dir/FreeSurferColorLUT.txt \
+                                                    $luts_dir/fs_default.txt \
+                                                    aparc_parcels.mif
+labelconvert $fs_dir/subjects/$subject_id/mri/aparc.a2009s+aseg.mgz \ 
+                                                    $fs_dir/FreeSurferColorLUT.txt \
+                                                    $luts_dir/fs_a2009s.txt \
+                                                    aparc2009s_parcels.mif
+# schaefer atlases (looks like we dont need a labelconvert for schaefer atlas see ->)
+# https://community.mrtrix.org/t/whole-brain-connectome-using-schaefer-parcellation/5301/2
+
+
 tck2connectome -symmetric -zero_diagonal -scale_invnodevol -tck_weights_in sift_1M.txt tracks_10M.tck 0002_parcels_aparc.mif connectome.csv -out_assignment assignments.txt
 label2mesh 0002_parcels_aparc.mif parcel_mesh.obj # add also for other atlas
 meshfilter parcel_mesh.obj smooth parcel_mesh_smoothed.obj
@@ -104,3 +133,5 @@ connectome2tck tracks_10M.tck assignments.txt edge_exemplar.tck -files single -e
 
 ### plots
 # mrview of dwibiascorrect
+# quality of co-registration
+# mrview sub-02_den_preproc_unbiased.mif -overlay.load 5tt_nocoreg.mif -overlay.colourmap 2 -overlay.load 5tt_coreg.mif -overlay.colourmap 1
