@@ -11,7 +11,8 @@ def create_subjects_dir(
         subject_id,
         raws_dir,
         subjects_dir,
-        on_missing="warn"
+        on_missing="warn",
+        skip_list=None
         ):
     """
     Creates a folder structure with the following hierarchy:
@@ -52,7 +53,7 @@ def create_subjects_dir(
             if title == "MRI":
                 _create_mri_folders(subject_id, mri_dir, subject_dir)
             if title == "EEG":
-                _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir)
+                _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_list)
         else:
             if on_missing == "warn":
                 warnings.warn(f"Subject {subject_id} not found in the {title} directory!", UserWarning)
@@ -87,33 +88,42 @@ def _create_mri_folders(subject_id, mri_dir, subject_dir):
 
             ## extract structural images
             if "_t1w_" in fname and not dest_paths["_t1w_"].exists():
+                print("Moving sMRI (T1) data ...")
                 shutil.copy(mri_dir / fname, subject_dir / "sMRI")
                 shutil.move(subject_dir / "sMRI" / fname, subject_dir / "sMRI" / "raw_anat_T1.nii")
 
             if "_3dt2_" in fname and not dest_paths["_3dt2_"].exists():
+                print("Moving sMRI (T2) data ...")
                 shutil.copy(mri_dir / fname, subject_dir / "sMRI")
                 shutil.move(subject_dir / "sMRI" / fname, subject_dir / "sMRI" / "raw_anat_T2.nii")
                 
             ## extract functional images
-            if "_3_1_fmri" in fname and not dest_paths["_3_1_fmri"].exists():
+            if "_3_1_fmri.nii" in fname and not dest_paths["_3_1_fmri"].exists():
+                print("Moving fMRI data (session 1) ...")
                 shutil.copy(mri_dir / fname, subject_dir / "fMRI")
                 shutil.move(subject_dir / "fMRI" / fname, subject_dir / "fMRI" / "raw_func_s1.nii")
-            if "_4_1_fmri" in fname and not dest_paths["_4_1_fmri"].exists():
+            if "_4_1_fmri.nii" in fname and not dest_paths["_4_1_fmri"].exists():
+                print("Moving fMRI data (session 2) ...")
                 shutil.copy(mri_dir / fname, subject_dir / "fMRI")
                 shutil.move(subject_dir / "fMRI" / fname, subject_dir / "fMRI" / "raw_func_s2.nii")
 
         ## extract diffusion images
-        if fname.endswith("_dti_32.rec") or fname.endswith("_dti_32.par"):
-            if not (dest_paths["_dti_32.rec"].exists() or dest_paths["_dti_32.par"].exists()):
-                shutil.copy(mri_dir / fname, subject_dir / "dMRI")
-                shutil.move(subject_dir / "dMRI" / fname, subject_dir / "dMRI" / f"raw_dwi.{fname[-3:]}")
+        if fname.endswith("_dti_32.rec") and not dest_paths["_dti_32.rec"].exists():
+            print("Moving dMRI data ...")
+            shutil.copy(mri_dir / fname, subject_dir / "dMRI")
+            shutil.move(subject_dir / "dMRI" / fname, subject_dir / "dMRI" / "raw_dwi.rec")
+        
+        if fname.endswith("_dti_32.par") and not dest_paths["_dti_32.par"].exists():
+            shutil.copy(mri_dir / fname, subject_dir / "dMRI")
+            shutil.move(subject_dir / "dMRI" / fname, subject_dir / "dMRI" / "raw_dwi.par")
 
-        if fname.endswith(".log"):
+        if fname.endswith(".log") and not (subject_dir / "logs" / f"{fname[:-18]}.log").exists():
+            print("Moving log files ...")
             shutil.copy(mri_dir / fname, subject_dir / "logs")
             shutil.move(subject_dir / "logs" / fname, subject_dir / "logs" / f"{fname[:-18]}.log")
 
 ## eeg data
-def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir):
+def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_list):
     """
     Creates EEG folder structure
     """
@@ -127,7 +137,7 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir):
                     "omi",
                     "regularity",
                     "audiobook",
-                    "movie"
+                    "movie",
                     "reports",
                     "captrack"
                     ]
@@ -136,14 +146,26 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir):
     dest_paths = {paradigm: subject_dir / "EEG" / paradigm for paradigm in eeg_subfolders[:-2]}
 
     fnames = os.listdir(eeg_dir)
+
+    if skip_list is None:
+        subfolders = eeg_subfolders[:-2]
+    else:
+        subfolders = [i for i in eeg_subfolders if i not in skip_list][:-2]
+
+
     for fname in fnames:    
         if fname.startswith(subject_id):
-            for paradigm in eeg_subfolders[:-2]:
-                if f"_{paradigm}." in fname and not dest_paths[paradigm].exists():
-                    shutil.copy(eeg_dir / fname, subject_dir / "EEG" / paradigm)
+            for paradigm in subfolders:
+                if f"_{paradigm}" in fname or f"-{paradigm}" in fname:
+                    if not (dest_paths[paradigm] / paradigm).exists():
+                        print(f"Moving EEG paradigm {paradigm} ...")
+                        shutil.copy(eeg_dir / fname, subject_dir / "EEG" / paradigm)
 
     ## only for rest. -> rest_v1
-    shutil.move(subject_dir / "EEG" / "rest.", subject_dir / "EEG" / "rest_v1")
+    try:
+        shutil.move(subject_dir / "EEG" / "rest.", subject_dir / "EEG" / "rest_v1")
+    except:
+        print("rest_v1 already exist.")
 
     ## captrack data
     fnames = os.listdir(captrack_dir)
