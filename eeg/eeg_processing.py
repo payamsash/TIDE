@@ -66,8 +66,8 @@ def run_rs_analysis(
         visit : int
             The visit number of the resting state paradigm. 
         event_ids: dict | None
-            If dict, the keys should be the eyes_close and eyes_open and the values should be integar.
-            If None, the first event will be assumed to be eyes closed trigger.
+            If dict, the keys should be the eyes_close and eyes_open (respectively) and the values should be integar.
+            If None, the first event (not new segment) will be assumed to be eyes closed trigger.
         source_analysis: bool
             If yes, source analysis will be performed, if False only epochs will be saved.
         mri: bool
@@ -123,42 +123,67 @@ def run_rs_analysis(
 
     ## be cautious
     events, _ = events_from_annotations(raw)
-    if event_ids == None:
-        events_ec = events[:, 0][events[:, 2] == 6]  ## assume 6 is eyes closed
-        events_eo = events[:, 0][events[:, 2] == 4]  ## assume 4 is eyes open
-    else:
-        events_ec = events[:, 0][events[:, 2] == event_ids["eyes_close"]]  
-        events_eo = events[:, 0][events[:, 2] == event_ids["eyes_open"]]  
+    if event_ids == None: # zurich device
 
-    if len(events_ec) != len(events_eo):
-        raise ValueError("Number of eyes open and eyes close events dons not match.")
+        if len(events) == 0:
+            print("This recording is only eyes open or eyes closed.")
+            both_conditions = False
+            tmin = 5
+            raw.crop(tmin=tmin)
+            epochs_eo = make_fixed_length_epochs(raw, duration=2) 
 
-    raws_ec, raws_eo = [], []
-    for ec_s, eo_s in zip(events_ec, events_eo):
-        tmin, tmax = ec_s / info["sfreq"], eo_s / info["sfreq"]
-        raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+        elif len(events) == 1:
+            print("This recording is only eyes open or eyes closed.")
+            both_conditions = False
+            tmin = max(events[0] / info["sfreq"] + 3, 5) # 3 seconds skip
+            raw.crop(tmin=tmin)
+            epochs_eo = make_fixed_length_epochs(raw, duration=2)
 
-    for ec_o, ec_s in zip(events_eo[:-1], events_ec[1:]):
-        tmin, tmax = ec_o / 250, ec_s / 250
-        raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+        elif len(events) > 1:
+            both_conditions = True
+            events_ec = events[:, 0][events[:, 2] == 6]  ## assume 6 is eyes closed
+            events_eo = events[:, 0][events[:, 2] == 4]  ## assume 4 is eyes open
+    
+    else: # add other sites here
+        both_conditions = True
+        events_ec = events[:, 0][events[:, 2] == list(event_ids.keys())[0]]
+        events_eo = events[:, 0][events[:, 2] == list(event_ids.keys())[1]]
 
-    epochs_ec, epochs_eo = [make_fixed_length_epochs(
-                                                    concatenate_raws(raw_e),
-                                                    duration=2
-                                                    ) for raw_e in [raws_ec, raws_eo]]
+    # add skip couple of seconds
+    if both_conditions:
+        if len(events_ec) != len(events_eo):
+            raise ValueError("Number of eyes open and eyes close events don't not match.")
+
+        raws_ec, raws_eo = [], []
+        for ec_s, eo_s in zip(events_ec, events_eo):
+            tmin = ec_s / info["sfreq"] + 3 # skip few seconds
+            tmax = eo_s / info["sfreq"] 
+            raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+
+        for ec_o, ec_s in zip(events_eo[:-1], events_ec[1:]):
+            tmin = ec_o / 250 + 3 # skip few seconds
+            tmax = ec_s / 250
+            raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+
+        epochs_ec, epochs_eo = [make_fixed_length_epochs(
+                                                        concatenate_raws(raw_e),
+                                                        duration=2
+                                                        ) for raw_e in [raws_ec, raws_eo]]
     del raw
     
     ## check manual_data_scroll
     if manual_data_scroll:
         epochs_eo.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
-        epochs_ec.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
+        if both_conditions:
+            epochs_ec.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
     
     if saving_dir is None:
         saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
 
     ## save epochs
-    [epochs.save(fname=saving_dir / f"epochs-{title}-epo.fif", overwrite=True) \
-                                    for epochs, title in zip([epochs_ec, epochs_eo], ["ec", "eo"])] 
+    epochs_eo.save(fname=saving_dir / f"epochs-eo-epo.fif", overwrite=True)
+    if both_conditions:
+        epochs_ec.save(fname=saving_dir / f"epochs-ec-epo.fif", overwrite=True)
             
     if source_analysis:
         if mri:
