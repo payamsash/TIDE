@@ -462,7 +462,6 @@ def run_erp_analysis(
             coreg.omit_head_shape_points(distance=5.0 / 1000)
             coreg.fit_icp(n_iterations=40, nasion_weight=10)
             trans = coreg.trans
-            brain_labels = read_labels_from_annot(parc="aparc", **kwargs)
 
         else:    
             tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
@@ -474,7 +473,6 @@ def run_erp_analysis(
             trans = fs_dir / "bem" / "fsaverage-trans.fif"
             src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
             bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
-            brain_labels = read_labels_from_annot(parc="aparc", **kwargs)[:-1]
 
         tqdm.write("Computing forward solution ...\n")
         progress.update(1)
