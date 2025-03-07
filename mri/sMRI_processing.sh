@@ -14,36 +14,36 @@
 
 set -e
 display_usage() {
-	echo "$(basename $0) [raw_t1] [raw_t2] [raw_dwi] [subject_id] [saving_dir] [recon_all]"
+	echo "$(basename $0) [subject_id] [recon_all]"
 	echo "This script uses Freesurfer for cortical and subcortical segmentation
             as well as extracting probabilistic white matter tracts:
-			1) The structural T1 image (.rec / .nii format);
-			2) The structural T2 image (.rec / .nii format);
-			3) The diffusion image (.rec / .nii format);
-			4) The subject ID number;
-			5) Path to a directory to save anatomical data of the subject. If not provided, the default directory will be used;
-            6) If false, the cortical segmentation is already done. By default, recon-all function from FS will be run." 
+			1) The subject ID number;
+            2) If false, the cortical segmentation is already done. By default, recon-all function from FS will be run." 
 	}
 
-if [[ "$1" == "--h" || $# -lt 5 ]]; then
+if [[ "$1" == "--h" || $# -lt 1 ]]; then
 	display_usage
 	exit 1
 fi
 
-raw_t1=$1
-raw_t2=$2
-raw_dwi=$3
-subject_id=$4
-saving_dir=$5
-recon_all=${6:-false}
+subject_id=$1
+recon_all=${2:-false}
 
 ## set Paths
-spath="../subjects/${subject_id}/sMRI"
-gcs_dir="./gcs"
-saving_dir="${5:-$spath}"
-export FREESURFER_HOME=/Applications/freesurfer/dev
-export SUBJECTS_DIR=$saving_dir
+export FREESURFER_HOME=/usr/local/freesurfer/8.0.0
+export SUBJECTS_DIR=/home/ubuntu/data/subjects_fs_dir
+export LD_LIBRARY_PATH=$FREESURFER_HOME/MCRv97/runtime/glnxa64:$FREESURFER_HOME/MCRv97/bin/glnxa64:$FREESURFER_HOME/MCRv97/sys/os/glnxa64:$FREESURFER_HOME/MCRv97/extern/bin/glnxa64
+
+# export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=8
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
+gcs_dir=" $FREESURFER_HOME/gcs" # I need to have it, but looks like scp is crashing
+
+
+spath="/home/ubuntu/data/subjects_raw/$subject_id"
+aan_path="$FREESURFER_HOME/bin"
+T2_path="$spath/sMRI/raw_anat_T2.nii"
+dwi_path="$spath/dMRI/raw_dwi.rec"
+
 
 ## cortical and subcortical segmentation
 if [[ "$recon_all" == "true" ]]; then
@@ -51,23 +51,22 @@ if [[ "$recon_all" == "true" ]]; then
 	recon-all -all -subjid $subject_id  
 fi
 
-## subsegmentation (hippocampus + amygdala, brainstem)
-segmentHA_T2.sh $subject_id raw_t2 T1_T2 1 
-segmentBS.sh $subject_id # -> fixed
+## first round (hippocampus + amygdala, brainstem, AAN, hypothalamus, thalamic nuclei, cerebellum)
+segmentHA_T2.sh $subject_id $T2_path T1_T2 1 
+segmentBS.sh $subject_id
 
-## second round (AAN, hypothalamus, thalamic nuclei, cerebellum)
-export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=8
-segmentAAN.sh $subject_id # fix later (not found) -> in the development built -> working with 2019 -> looks like fixed -> so local payam
+mv segmentAAN.sh /home/ubuntu/data
 
 
-###
+## fix this part now needs mri_robust_register
+chmod u+x segmentAAN.sh
+$aan_path/segmentAAN.sh $subject_id
+
 mri_segment_hypothalamic_subunits $subject_id # fix later (illegal hardware instruction) -> probably linux will fix.
 
 
 
-
-
-#####
+## first tracula should be done
 segmentThalamicNuclei_DTI.sh -s $subject_id # fix later (not found) -> in the development built -> changed to matlab R2014b -> cant
 
 '''
