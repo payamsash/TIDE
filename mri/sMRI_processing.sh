@@ -21,6 +21,9 @@ display_usage() {
             2) If false, the cortical segmentation is already done. By default, recon-all function from FS will be run." 
 	}
 
+
+## put lots of echos here
+
 if [[ "$1" == "--h" || $# -lt 1 ]]; then
 	display_usage
 	exit 1
@@ -36,7 +39,7 @@ export LD_LIBRARY_PATH=$FREESURFER_HOME/MCRv97/runtime/glnxa64:$FREESURFER_HOME/
 
 # export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=8
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
-gcs_dir=" $FREESURFER_HOME/gcs" # I need to have it, but looks like scp is crashing
+sch_gcs_dir=" $FREESURFER_HOME/gcs"
 
 
 spath="/home/ubuntu/data/subjects_raw/$subject_id"
@@ -55,30 +58,15 @@ fi
 segmentHA_T2.sh $subject_id $T2_path T1_T2 1 
 segmentBS.sh $subject_id
 
-mv segmentAAN.sh /home/ubuntu/data
+sudo chmod +x $FREESURFER_HOME/segmentNuclei
+segmentAAN.sh $subject_id
 
-
-## fix this part now needs mri_robust_register
-chmod u+x segmentAAN.sh
-$aan_path/segmentAAN.sh $subject_id
-
-mri_segment_hypothalamic_subunits $subject_id # fix later (illegal hardware instruction) -> probably linux will fix.
-
-
-
-## first tracula should be done
-segmentThalamicNuclei_DTI.sh -s $subject_id # fix later (not found) -> in the development built -> changed to matlab R2014b -> cant
-
-'''
-Unrecognized function or variable 'atlasInitialisationFiles'.
-
-Error in TS_fnc_thalamus_seg_gem_joint (line 777)
-
-Error in TS_fnc_jointSegmentationWrapper (line 66)
-
-
-looks like its under development so not yet ...
-'''
+## 2. now fix mri_segment_hypothalamic_subunits (wait for answer)
+## 3. now fix segmentThalamicNuclei_DTI.sh
+## 4. now fix histological atlas
+## 5. cerebellum
+## 6. Striatal atlas
+## 7. schaefer atlas
 
 mri_vol2vol --mov 0002/mri/norm.mgz --o 0002/mri/norm.dwispace.mgz --lta 0002/dmri/xfms/anatorig2diff.bbr.lta  --no-resample --targ 0002/dmri/dtifit_FA.nii.gz
 mri_vol2vol --mov 0002/mri/aseg.mgz --o 0002/mri/aseg.dwispace.mgz --lta 0002/dmri/xfms/anatorig2diff.bbr.lta  --no-resample --targ 0002/dmri/dtifit_FA.nii.gz
