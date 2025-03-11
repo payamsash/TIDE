@@ -18,7 +18,7 @@ display_usage() {
     echo " "
     echo "CORTICAL AND SUBCORTICAL SEGMENTATION OF T1 IMAGE (+T2 +DWI)"
     echo " "
-	echo "This script uses Freesurfer for cortical and subcortical segmentation"
+    echo "This script uses Freesurfer for cortical and subcortical segmentation"
     echo "as well as extracting probabilistic white matter tracts in multiple steps:"
     echo " "
     echo "1. Segmentation of hippocampal subfields and nuclei of the amygdala using an additional T2 scan"
