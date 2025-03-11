@@ -1,0 +1,28 @@
+##### Written by Payam S. Shabestari, Zurich, 01.2025
+#####
+setenv SUBJECTS_DIR $SUBJECTS_DIR
+setenv ANTSPATH /home/ubuntu/data/src_codes/ants-2.5.4/bin
+set subjlist = $subject_id
+set dtroot = $SUBJECTS_DIR/$subject_id/DTI
+set dcmroot = $SUBJECTS_DIR/$subject_id/DTI
+set dcmlist = dwi_den.nii
+set bveclist = raw_dwi.bvec
+set bvallist = raw_dwi.bval
+set dob0 = 0
+set echospacing = 1.139 
+set pedir = AP
+set epifactor = 47
+set doeddy = 2
+set dorotbvecs = 1
+set intrareg = 3
+set intradof = 6
+set intrarot = 90
+set interreg = 5
+set segname = aparc+aseg
+set usethalnuc = 1
+set usemaskanat = 1
+set nstick = 2
+set nburnin = 200
+set nsample = 7500
+set nkeep = 5
+set reinit = 0

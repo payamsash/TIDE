@@ -5,24 +5,42 @@
 # email: payam.sadeghishabestari@uzh.ch
 # This script is written mainly for Antinomics project. However It could be used for other purposes.
 
-
-## echo with color
-## chmod u+x sMRI_processing.sh
-## ./sMRI_processing.sh
-## echo sth >> log.txt
-## copy these files to work with linux : license, buckner atlas, choi atlas, tracula config file
-
 set -e
 display_usage() {
 	echo "$(basename $0) [subject_id] [recon_all]"
-	echo "This script uses Freesurfer for cortical and subcortical segmentation
-            as well as extracting probabilistic white matter tracts:
-			1) The subject ID number;
-            2) If false, the cortical segmentation is already done. By default, recon-all function from FS will be run." 
+    echo " "
+    echo "Usage:"
+    echo "[subject_id] -> The subject ID"
+    echo "[recon-all] -> If false, the cortical segmentation is already done."
+    echo "By default, recon-all function from FS will be run."
+    echo " "
+    echo " "
+    echo " "
+    echo "CORTICAL AND SUBCORTICAL SEGMENTATION OF T1 IMAGE (+T2 +DWI)"
+    echo " "
+	echo "This script uses Freesurfer for cortical and subcortical segmentation"
+    echo "as well as extracting probabilistic white matter tracts in multiple steps:"
+    echo " "
+    echo "1. Segmentation of hippocampal subfields and nuclei of the amygdala using an additional T2 scan"
+    echo " "
+    echo "2. Segmentation of Brainstem Substructures"
+    echo " "
+    echo "3. Segmentation of thalamic nuclei using only T1 image"
+    echo " "
+    echo "4. Segmentations of brainstem nuclei that are part of the Ascending Arousal Network"
+    echo " "
+    echo "5. Segmentation of the hypothalamus and its associated subunits"
+    echo " "
+    echo "RUNNING TRACULA TO EXTRACT PROBABLISTIC WHITE MATTER TRACTS"
+    echo " "
+    echo "1. Pre-processing of the diffusion image data."
+    echo " "
+    echo "2. Ball-and-stick model fit to reconstruct the pathways from the DWI data."
+    echo " "
+    echo "3. Generate the probability distributions for all tracts."
+    echo " "
 	}
 
-
-## put lots of echos here
 
 if [[ "$1" == "--h" || $# -lt 1 ]]; then
 	display_usage
@@ -35,18 +53,19 @@ recon_all=${2:-false}
 ## set Paths
 export FREESURFER_HOME=/usr/local/freesurfer/8.0.0
 export SUBJECTS_DIR=/home/ubuntu/data/subjects_fs_dir
+export ANTSPATH=/home/ubuntu/data/src_codes/ants-2.5.4/bin
 export LD_LIBRARY_PATH=$FREESURFER_HOME/MCRv97/runtime/glnxa64:$FREESURFER_HOME/MCRv97/bin/glnxa64:$FREESURFER_HOME/MCRv97/sys/os/glnxa64:$FREESURFER_HOME/MCRv97/extern/bin/glnxa64
-
-# export ITK_GLOBAL_DEFAULT_NUMBER_OF_THREADS=8
+export PATH=/usr/lib/mrtrix3/bin:$PATH
+export PATH=/home/ubuntu/fsl/bin:$PATH
+export PATH=/home/ubuntu/data/src_codes/ants-2.5.4/bin:$PATH
+export subject_id=$subject_id
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
+
 sch_gcs_dir=" $FREESURFER_HOME/gcs"
-
-
 spath="/home/ubuntu/data/subjects_raw/$subject_id"
-aan_path="$FREESURFER_HOME/bin"
-T2_path="$spath/sMRI/raw_anat_T2.nii"
-dwi_path="$spath/dMRI/raw_dwi.rec"
-
+raw_t2="$spath/sMRI/raw_anat_T2.nii"
+raw_dwi="$spath/dMRI/raw_dwi.rec"
+dpath_fs="$SUBJECTS_DIR/$subject_id/DTI"
 
 ## cortical and subcortical segmentation
 if [[ "$recon_all" == "true" ]]; then
@@ -55,18 +74,50 @@ if [[ "$recon_all" == "true" ]]; then
 fi
 
 ## first round (hippocampus + amygdala, brainstem, AAN, hypothalamus, thalamic nuclei, cerebellum)
-segmentHA_T2.sh $subject_id $T2_path T1_T2 1 
+echo -e "\e[32mSegmentation of hippocampal subfields and nuclei of the amygdala!"
+segmentHA_T2.sh $subject_id $raw_t2 T1_T2 1 
+
+echo -e "\e[32mSegmentation of Brainstem Substructures!"
 segmentBS.sh $subject_id
 
-sudo chmod +x $FREESURFER_HOME/segmentNuclei
+echo -e "\e[32mSegmentation of thalamic nuclei using only T1 image!"
+segmentThalamicNuclei.sh $subject_id # for now
+
+echo -e "\e[32mSegmentations of brainstem nuclei that are part of the Ascending Arousal Network!"
+sudo chmod +x $FREESURFER_HOME/bin/segmentNuclei
 segmentAAN.sh $subject_id
 
-## 2. now fix mri_segment_hypothalamic_subunits (wait for answer)
+echo -e "\e[32mSegmentation of the hypothalamus and its associated subunits"
+mri_segment_hypothalamic_subunits --s $subject_id
+
+
+## convert DTI to nii, then denoise it with mrtrix, then tracula
+mkdir $dpath_fs
+dcm2niix -o $dpath_fs -f raw_dwi $raw_dwi
+mrconvert $dpath_fs/raw_dwi.nii $dpath_fs/raw_dwi.mif -fslgrad $dpath_fs/raw_dwi.bvec $dpath_fs/raw_dwi.bval
+dwidenoise $dpath_fs/raw_dwi.mif $dpath_fs/dwi_den.mif
+mrconvert $dpath_fs/dwi_den.mif $dpath_fs/dwi_den.nii -fslgrad $dpath_fs/raw_dwi.bvec $dpath_fs/raw_dwi.bval
+
+
+echo -e "\e[32mPre-processing of the diffusion image data!"
+trac-all -prep -c /home/ubuntu/data/src_codes/tracula_config.txt
+
+echo -e "\e[32mBall-and-stick model fit to reconstruct the pathways from the DWI data!"
+trac-all -bedp -c /home/ubuntu/data/src_codes/tracula_config.txt
+
+echo -e "\e[32mGenerate the probability distributions for all tracts!"
+trac-all -path -c /home/ubuntu/data/src_codes/tracula_config.txt
+
+
+
 ## 3. now fix segmentThalamicNuclei_DTI.sh
 ## 4. now fix histological atlas
-## 5. cerebellum
-## 6. Striatal atlas
-## 7. schaefer atlas
+## 5. cerebellum (I need to ask this, but they are already in the folder in FS)
+## 6. Striatal atlas (I need to ask this)
+## 7. schaefer atlas (maybe open a new folder for it) (I think I will only need it in fmri)
+
+
+# mri_histo_atlas_segment_fireants INPUT_SCAN OUTPUT_DIRECTORY GPU THREADS [BF_MODE]
 
 mri_vol2vol --mov 0002/mri/norm.mgz --o 0002/mri/norm.dwispace.mgz --lta 0002/dmri/xfms/anatorig2diff.bbr.lta  --no-resample --targ 0002/dmri/dtifit_FA.nii.gz
 mri_vol2vol --mov 0002/mri/aseg.mgz --o 0002/mri/aseg.dwispace.mgz --lta 0002/dmri/xfms/anatorig2diff.bbr.lta  --no-resample --targ 0002/dmri/dtifit_FA.nii.gz
