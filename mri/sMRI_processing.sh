@@ -98,7 +98,6 @@ mrconvert $dpath_fs/raw_dwi.nii $dpath_fs/raw_dwi.mif -fslgrad $dpath_fs/raw_dwi
 dwidenoise $dpath_fs/raw_dwi.mif $dpath_fs/dwi_den.mif
 mrconvert $dpath_fs/dwi_den.mif $dpath_fs/dwi_den.nii -fslgrad $dpath_fs/raw_dwi.bvec $dpath_fs/raw_dwi.bval
 
-
 echo -e "\e[32mPre-processing of the diffusion image data!"
 trac-all -prep -c /home/ubuntu/data/src_codes/tracula_config.txt
 
