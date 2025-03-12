@@ -1,6 +1,7 @@
 # Written by Payam S. Shabestari, Zurich, 01.2025 
 # Email: payam.sadeghishabestari@uzh.ch
 
+import ipdb
 import os
 from pathlib import Path
 import shutil
@@ -159,6 +160,8 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_lis
                 if f"_{paradigm}" in fname or f"-{paradigm}" in fname:
                     if not (dest_paths[paradigm] / paradigm).exists():
                         print(f"Moving EEG paradigm {paradigm} ...")
+                        print(f"copying from {eeg_dir / fname} to {subject_dir / 'EEG' / paradigm}")
+                        ipdb.set_trace()
                         shutil.copy(eeg_dir / fname, subject_dir / "EEG" / paradigm)
 
     ## only for rest. -> rest_v1
@@ -166,8 +169,12 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_lis
         shutil.move(subject_dir / "EEG" / "rest.", subject_dir / "EEG" / "rest_v1")
     except:
         print("rest_v1 already exist.")
+        print(subject_dir / "EEG" / "rest_v1")
 
     ## captrack data
+    captrack_dir = Path(captrack_dir)
+    if not captrack_dir.exists():
+        captrack_dir.mkdir(exist_ok=True)
     fnames = os.listdir(captrack_dir)
     for fname in fnames:
         if f"_{subject_id}." in fname:

@@ -1,6 +1,7 @@
 # Written by Payam S. Shabestari, Zurich, 01.2025 
 # Email: payam.sadeghishabestari@uzh.ch
 
+import ipdb
 import warnings
 from pathlib import Path
 from tqdm import tqdm
@@ -31,7 +32,6 @@ from mne import (set_log_level,
 def run_rs_analysis(
         subject_id,
         subjects_dir=None,
-        visit=1,
         event_ids=None,
         source_analysis=True,
         mri=False,
@@ -39,7 +39,8 @@ def run_rs_analysis(
         manual_data_scroll=False,
         create_report=True,
         saving_dir=None,
-        verbose="ERROR"
+        verbose="ERROR",
+        overwrite=False
         ):
     
     """ Sensor and source space analysis of the preprocessed resting-state eeg recordings from BrainVision device.
@@ -113,7 +114,7 @@ def run_rs_analysis(
     if subjects_fs_dir == None:
         subjects_fs_dir = "/Applications/freesurfer/7.4.1/subjects"
 
-    paradigm = f"rest_v{visit}"
+    paradigm = f"rest"
     fname = subjects_dir / subject_id / "EEG" / paradigm / "raw_prep.fif"
     raw = read_raw_fif(fname, preload=True)
     info = raw.info
@@ -123,26 +124,32 @@ def run_rs_analysis(
 
     ## be cautious
     events, _ = events_from_annotations(raw)
-    if event_ids == None: # zurich device
-
+    skip=False
+    if events.shape[0]==2 or events.shape[0]==4:
+        skip=True
+        both_conditions = False
+        events = events[0,:].reshape(1,-1)
+        print('Warning- please check this')
+    if event_ids is None : # zurich device
         if len(events) == 0:
             print("This recording is only eyes open or eyes closed.")
             both_conditions = False
             tmin = 5
             raw.crop(tmin=tmin)
             epochs_eo = make_fixed_length_epochs(raw, duration=2) 
-
+            skip=True
         elif len(events) == 1:
             print("This recording is only eyes open or eyes closed.")
             both_conditions = False
-            tmin = max(events[0] / info["sfreq"] + 3, 5) # 3 seconds skip
+            tmin = max(events[0,0] / info["sfreq"] + 3, 5) # 3 seconds skip
             raw.crop(tmin=tmin)
             epochs_eo = make_fixed_length_epochs(raw, duration=2)
-
-        elif len(events) > 1:
+            skip=True
+        elif len(events) > 2:
             both_conditions = True
             events_ec = events[:, 0][events[:, 2] == 6]  ## assume 6 is eyes closed
             events_eo = events[:, 0][events[:, 2] == 4]  ## assume 4 is eyes open
+            skip=False
     
     else: # add other sites here
         both_conditions = True
@@ -150,29 +157,30 @@ def run_rs_analysis(
         events_eo = events[:, 0][events[:, 2] == list(event_ids.keys())[1]]
 
     # add skip couple of seconds
-    if both_conditions:
-        if len(events_ec) != len(events_eo):
-            raise ValueError("Number of eyes open and eyes close events don't not match.")
+    if not skip:
+        if both_conditions and events_ec.shape[0] == events_eo.shape[0]:
+            #if len(events_ec) != len(events_eo):
+            #    raise ValueError("Number of eyes open and eyes close events don't not match.")
 
-        raws_ec, raws_eo = [], []
-        for ec_s, eo_s in zip(events_ec, events_eo):
-            tmin = ec_s / info["sfreq"] + 3 # skip few seconds
-            tmax = eo_s / info["sfreq"] 
-            raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+            raws_ec, raws_eo = [], []
+            for ec_s, eo_s in zip(events_ec, events_eo):
+                tmin = ec_s / info["sfreq"] + 3 # skip few seconds
+                tmax = eo_s / info["sfreq"] 
+                raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
 
-        for ec_o, ec_s in zip(events_eo[:-1], events_ec[1:]):
-            tmin = ec_o / 250 + 3 # skip few seconds
-            tmax = ec_s / 250
-            raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+            for ec_o, ec_s in zip(events_eo[:-1], events_ec[1:]):
+                tmin = ec_o / 250 + 3 # skip few seconds
+                tmax = ec_s / 250
+                raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
 
-        epochs_ec, epochs_eo = [make_fixed_length_epochs(
-                                                        concatenate_raws(raw_e),
-                                                        duration=2
-                                                        ) for raw_e in [raws_ec, raws_eo]]
+            epochs_ec, epochs_eo = [make_fixed_length_epochs(
+                                                            concatenate_raws(raw_e),
+                                                            duration=2
+                                                            ) for raw_e in [raws_ec, raws_eo]]
     del raw
     
     ## check manual_data_scroll
-    if manual_data_scroll:
+    if manual_data_scroll and not skip:
         epochs_eo.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
         if both_conditions:
             epochs_ec.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
@@ -181,10 +189,11 @@ def run_rs_analysis(
         saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
 
     ## save epochs
-    epochs_eo.save(fname=saving_dir / f"epochs-eo-epo.fif", overwrite=True)
-    if both_conditions:
-        epochs_ec.save(fname=saving_dir / f"epochs-ec-epo.fif", overwrite=True)
-            
+    if not skip:
+        epochs_eo.save(fname=saving_dir / f"epochs-eo-epo.fif", overwrite=True)
+        if both_conditions:
+            epochs_ec.save(fname=saving_dir / f"epochs-ec-epo.fif", overwrite=True)
+                
     if source_analysis:
         if mri:
             kwargs = {"subject": subject_id,
@@ -209,7 +218,7 @@ def run_rs_analysis(
             coreg.fit_icp(n_iterations=40, nasion_weight=10)
             trans = coreg.trans
 
-        else:    
+        else:   # mri==False 
             kwargs = {"subject": "fsaverage",
                     "subjects_dir": None
                     }
@@ -242,7 +251,7 @@ def run_rs_analysis(
                                                 )
         
         write_inverse_operator(fname=saving_dir / "operator-inv.fif",
-                                inv=inverse_operator)
+                                inv=inverse_operator,overwrite=overwrite)
 
     ## create a report
     if create_report:

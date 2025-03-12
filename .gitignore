@@ -1,0 +1,6 @@
+.DS_Store   
+.venv
+*.fif
+*.eeg
+tmp_data
+data

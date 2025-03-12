@@ -1,6 +1,7 @@
 # Written by Payam S. Shabestari, Zurich, 01.2025 
 # Email: payam.sadeghishabestari@uzh.ch
 
+import ipdb
 import os
 from pathlib import Path
 from ast import literal_eval
@@ -33,6 +34,7 @@ def preprocessing(
         pulse_correct=True,
         create_report=True,
         saving_dir=None,
+        overwrite=False,
         verbose="ERROR"
         ):
     
@@ -105,18 +107,19 @@ def preprocessing(
     else:
         subjects_dir = Path(subjects_dir)
 
-    fname = subjects_dir / subject_id / "EEG" / paradigm / f"{subject_id}_{paradigm}.vhdr"
-    captrak_dir = subjects_dir / subject_id / "EEG" / "captrack"
-    if not fname.exists():
-        raise ValueError(f"Subject {subject_id}_{paradigm}.vhdr not found in the EEG directory!")
+    fname = subjects_dir / subject_id / "EEG" / paradigm / f"{subject_id}.vhdr"
+#    captrak_dir = subjects_dir / subject_id / "EEG" / "captrack"
+#    if not fname.exists():
+#        raise ValueError(f"Subject {subject_id}.vhdr not found in the EEG directory!")
+#
+#    try:
+#        for file_ck in os.listdir(captrak_dir):
+#            if file_ck.endswith(".bvct"): 
+#                montage = read_dig_captrak(file_ck)
+#    except:
+    montage = make_standard_montage("easycap-M1")
 
-    try:
-        for file_ck in os.listdir(captrak_dir):
-            if file_ck.endswith(".bvct"): 
-                montage = read_dig_captrak(file_ck)
-    except:
-        montage = make_standard_montage("easycap-M1")
-
+    """
     ch_types = {"O1": "eog",
                 "O2": "eog",
                 "PO7": "eog",
@@ -125,12 +128,13 @@ def preprocessing(
                 "Resp": "ecg",
                 "Audio": "stim"
                 }
+    """
     
     raw = read_raw_brainvision(vhdr_fname=fname)
-    raw.set_channel_types(ch_types)
-    raw.pick(["eeg", "eog", "ecg", "stim"])
+#    raw.set_channel_types(ch_types)
+#    raw.pick(["eeg", "eog", "ecg", "stim"])
     raw.load_data()
-    raw.set_montage(montage=montage)
+    raw.set_montage(montage=montage,match_case=False)
 
     ## resampling, filtering and re-referencing 
     tqdm.write("Resampling, filtering and re-referencing ...\n")
@@ -294,10 +298,12 @@ def preprocessing(
 
         if saving_dir == None:
             saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
-        report.save(fname=saving_dir.parent / "reports" / f"{paradigm}.h5", open_browser=False, overwrite=True)
+        saving_dir.mkdir(exist_ok=True)
+        reports_dir = saving_dir.parent / "reports" 
+        reports_dir.mkdir(exist_ok=True)
+        report.save(fname=reports_dir/ f"{paradigm}.h5", open_browser=False, overwrite=True)
 
-    if not saving_dir is False:
-        raw.save(fname=saving_dir / "raw_prep.fif")
+    raw.save(fname=saving_dir / "raw_prep.fif",overwrite = overwrite)
         
     tqdm.write("\033[32mEEG data were preprocessed sucessfully!\n")
     progress.update(1)
