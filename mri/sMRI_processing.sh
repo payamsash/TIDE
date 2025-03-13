@@ -63,11 +63,12 @@ export PATH=/home/ubuntu/data/src_codes/ants-2.5.4/bin:$PATH
 export subject_id=$subject_id
 source $FREESURFER_HOME/SetUpFreeSurfer.sh
 
-sch_gcs_dir=" $FREESURFER_HOME/gcs"
+sch_gcs_dir="$FREESURFER_HOME/gcs"
 spath="/home/ubuntu/data/subjects_raw/$subject_id"
 raw_t2="$spath/sMRI/raw_anat_T2.nii"
 raw_dwi="$spath/dMRI/raw_dwi.rec"
 dpath_fs="$SUBJECTS_DIR/$subject_id/DTI"
+mni152_dir="$SUBJECTS_DIR/MNI152"
 
 ## cortical and subcortical segmentation
 if [[ "$recon_all" == "true" ]]; then
@@ -75,21 +76,26 @@ if [[ "$recon_all" == "true" ]]; then
 	recon-all -all -subjid $subject_id  
 fi
 
-## first round (hippocampus + amygdala, brainstem, AAN, hypothalamus, thalamic nuclei, cerebellum)
+
 echo -e "\e[32mSegmentation of hippocampal subfields and nuclei of the amygdala!"
+echo -e "\e[33mwill take around 20 minutes ..."
 segmentHA_T2.sh $subject_id $raw_t2 T1_T2 1 
 
 echo -e "\e[32mSegmentation of Brainstem Substructures!"
+echo -e "\e[33mwill take around 15 minutes ..."
 segmentBS.sh $subject_id
 
 echo -e "\e[32mSegmentation of thalamic nuclei using only T1 image!"
+echo -e "\e[33mwill take around 20 minutes ..."
 segmentThalamicNuclei.sh $subject_id # for now
 
 echo -e "\e[32mSegmentations of brainstem nuclei that are part of the Ascending Arousal Network!"
+echo -e "\e[33mwill take around 25 minutes ..."
 sudo chmod +x $FREESURFER_HOME/bin/segmentNuclei
 segmentAAN.sh $subject_id
 
 echo -e "\e[32mSegmentation of the hypothalamus and its associated subunits"
+echo -e "\e[33mwill take around 25 minutes ..."
 mri_segment_hypothalamic_subunits --s $subject_id
 
 
@@ -101,51 +107,77 @@ dwidenoise $dpath_fs/raw_dwi.mif $dpath_fs/dwi_den.mif
 mrconvert $dpath_fs/dwi_den.mif $dpath_fs/dwi_den.nii -fslgrad $dpath_fs/raw_dwi.bvec $dpath_fs/raw_dwi.bval
 
 echo -e "\e[32mPre-processing of the diffusion image data!"
+echo -e "\e[33mwill take around 10 minutes ..."
 trac-all -prep -c /home/ubuntu/data/src_codes/tracula_config.txt
 
 echo -e "\e[32mBall-and-stick model fit to reconstruct the pathways from the DWI data!"
+echo -e "\e[33mwill take around 2.5 hours ..."
 trac-all -bedp -c /home/ubuntu/data/src_codes/tracula_config.txt
 
 echo -e "\e[32mGenerate the probability distributions for all tracts!"
+echo -e "\e[33mwill take around 1.6 hours ..."
 trac-all -path -c /home/ubuntu/data/src_codes/tracula_config.txt
 
 echo -e "\e[32mJoint segmentation of thalamic nuclei from T1 scan and DTI!"
+echo -e "\e[33mwill take around 1.6 hours ..."
 segmentThalamicNuclei_DTI.sh -s $subject_id
 
+echo -e "\e[32mSchaefer2018 parcellation in individual surface space!"
+echo -e "\e[33mwill take around 3 minutes ..."
+mkdir $SUBJECTS_DIR/$subject_id/schaefer
+hemis=("lh" "rh")
+for hemi in "${hemis[@]}"; do
+	for n in 100 200 300 400; do
+		for net_option in 7 17; do
+			mris_ca_label -l $SUBJECTS_DIR/$subject_id/label/${hemi}.cortex.label \
+                            $subject_id \
+                            ${hemi} \
+                            $SUBJECTS_DIR/$subject_id/surf/${hemi}.sphere.reg \
+                            $sch_gcs_dir/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks.gcs \
+                            $SUBJECTS_DIR/$subject_id/schaefer/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks_order.annot
+		done
+	done
+done
+
+
+## Striatal parcelation
+if [ -d "$mni152_dir" ]; then
+    echo "MNI152 already been segmented."
+else
+    recon-all -s MNI152 -i $FREESURFER_HOME/average/Choi_JNeurophysiol12_MNI152/FSL_MNI152_FreeSurferConformed_1mm.nii.gz -all
+fi
+
+
+
+mri_vol2vol_used --mov Choi_atlas1mm.nii.gz --s MNI152_FS --targ 
+>> $FREESURFER_HOME/average/mni305.cor.mgz --m3z talairach.m3z --o 
+>> Choi_atlas_freesurfer_internal_space.nii.gz --interp nearest
+
+mri_vol2vol --mov $SUBJECTS_DIR/AD_SUBJECT_FS/mri/norm.mgz --s AD_SUBJECT_FS 
+>> --targ Choi_atlas_freesurfer_internal_space.nii.gz --m3z talairach.m3z --o 
+>> Choi_atlas_AD_subject.nii.gz --interp nearest --inv-morph
+
+
+
+
+
+## so maybe I need to increase instance size again, because hist needs at least 24 G memory.
 echo -e "\e[32mBayesian Segmentation with Histological Atlas "NextBrain""
 mkdir $SUBJECTS_DIR/$subject_id/hist
 mri_histo_atlas_segment_fireants $SUBJECTS_DIR/$subject_id/mri/T1.mgz \
                                     $SUBJECTS_DIR/$subject_id/hist \
-                                    0 -1
+                                    0 2
                                     
 
 
-mv /scripts/* 
-
-end_time=$(date +%s)
-elapsed_time=$((end_time - start_time))
-echo "sMRI processing finished at $(date '+%Y-%m-%d %H:%M:%S')"
-echo "Elapsed time: $elapsed_time seconds"
 
 
 
-
-## 4. now fix histological atlas
+## 4. now fix histological atlas ???
 ## 5. cerebellum (I need to ask this, but they are already in the folder in FS)
 ## 6. Striatal atlas (I need to ask this)
-## 7. schaefer atlas (maybe open a new folder for it) (I think I will only need it in fmri)
+## 7. add tables extraction
 
-
-# mri_histo_atlas_segment_fireants INPUT_SCAN OUTPUT_DIRECTORY GPU THREADS [BF_MODE]
-
-mri_vol2vol --mov 0002/mri/norm.mgz --o 0002/mri/norm.dwispace.mgz --lta 0002/dmri/xfms/anatorig2diff.bbr.lta  --no-resample --targ 0002/dmri/dtifit_FA.nii.gz
-mri_vol2vol --mov 0002/mri/aseg.mgz --o 0002/mri/aseg.dwispace.mgz --lta 0002/dmri/xfms/anatorig2diff.bbr.lta  --no-resample --targ 0002/dmri/dtifit_FA.nii.gz
-mri_segment_thalamic_nuclei_dti_cnn --t1 0002/mri/norm.dwispace.mgz --aseg 0002/mri/aseg.dwispace.mgz --fa 0002/dmri/dtifit_FA.nii.gz --v1 0002/dmri/dtifit_V1.nii.gz --o 0002/mri/thalamic_dti.nii.gz --vol 0002/tables/thalamic_dti_volumes.csv
-
-'''
-so now error is again illegal hardware instruction which is probably due to TF. -> probably linux will fix
-
-'''
 
 
 
@@ -162,11 +194,11 @@ mri_vol2vol --mov Buckner_atlas.nii.gz \
 
 # Step 2: Warp the upsampled atlas to FreeSurfer's nonlinear volumetric space
 mri_vol2vol_used --mov Buckner_atlas1mm.nii.gz \
-                 --s MNI152_FS \
-                 --targ $FREESURFER_HOME/average/mni305.cor.mgz \
-                 --m3z talairach.m3z \
-                 --o Buckner_atlas_freesurfer_internal_space.nii.gz \
-                 --interp nearest
+                --s MNI152_FS \
+                --targ $FREESURFER_HOME/average/mni305.cor.mgz \
+                --m3z talairach.m3z \
+                --o Buckner_atlas_freesurfer_internal_space.nii.gz \
+                --interp nearest
 
 # Step 3: Warp the atlas from FreeSurfer internal space to subject’s native space
 mri_vol2vol --mov $SUBJECTS_DIR/SUBJECT_FS/mri/norm.mgz \
@@ -177,39 +209,14 @@ mri_vol2vol --mov $SUBJECTS_DIR/SUBJECT_FS/mri/norm.mgz \
             --interp nearest \
             --inv-morph
 
-# freeview -v ${SUBJECTS_DIR}/${SUBJECT_ID}/mri/orig.mgz \
-#            ${OUTPUT_DIR}/Buckner_atlas_subject.nii.gz:colormap=lut
 
 
-#### Striatal Parcellation
-# same as cerebellum
-
-# freeview -v FSL_MNI152_FreeSurferConformed_1mm.nii.gz Choi2012_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii.gz:colormap=lut:lut=Choi2012_7Networks_ColorLUT.txt
-
-# freeview -v FSL_MNI152_FreeSurferConformed_1mm.nii.gz Choi2012_7Networks_MNI152_FreeSurferConformed1mm_TightMask.nii.gz:colormap=lut:lut=Choi2012_7Networks_ColorLUT.txt Choi2012_7NetworksConfidence_MNI152_FreeSurferConformed1mm_TightMask.nii.gz:colormap=heat:heatscale=0,0.5,1
-
-
-
-## schafer atlas (we might need it for fMRI or dMRI)
-hemis=("lh" "rh")
-for hemi in "${hemis[@]}"; do
-	for n in 100 200 300 400; do
-		for net_option in 7 17; do
-			mris_ca_label -l $SUBJECTS_DIR/$subject_id/label/${hemi}.cortex.label \
-			$subject_id ${hemi} $SUBJECTS_DIR/$subject_id/surf/${hemi}.sphere.reg \
-			$gcs_dir/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks.gcs \
-			$SUBJECTS_DIR/$subject_id/label/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks_order.annot
-		done
-	done
-done
-
-## extracting probabilistic white matter tracts
 
 
 
 ## bem watershed
-
-mne watershed_bem -s 0002 -d /Applications/freesurfer/dev/subjects
+echo -e "\e[32mCreate BEM surfaces using the watershed algorithm!"
+mne watershed_bem -s $subject_id -d $SUBJECTS_DIR
 
 ##### tables
 
@@ -249,16 +256,7 @@ for hemi in "${hemispheres[@]}"; do
 done
 
 
-
-
-
-
-
-
-
-
-## for report 
-
-## AAN
-freeview -v $SUBJECTS_DIR/0002/mri/T1.mgz -v  $SUBJECTS_DIR/0002/mri/arousalNetworkLabels.v10.mgz:colormap=lut:lut=$FREESURFER_HOME/average/AAN/atlas/freeview.lut.txt
-
+end_time=$(date +%s)
+elapsed_time=$((end_time - start_time))
+echo "sMRI processing finished at $(date '+%Y-%m-%d %H:%M:%S')"
+echo "Elapsed time: $elapsed_time seconds"
