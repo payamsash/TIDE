@@ -3,7 +3,7 @@
 setenv SUBJECTS_DIR $SUBJECTS_DIR
 setenv ANTSPATH /home/ubuntu/data/src_codes/ants-2.5.4/bin
 set subjlist = $subject_id
-set dtroot = $SUBJECTS_DIR/$subject_id/DTI
+# set dtroot = $SUBJECTS_DIR/$subject_id/DTI
 set dcmroot = $SUBJECTS_DIR/$subject_id/DTI
 set dcmlist = dwi_den.nii
 set bveclist = raw_dwi.bvec

@@ -41,6 +41,8 @@ display_usage() {
     echo " "
 	}
 
+echo "sMRI processing started at $(date '+%Y-%m-%d %H:%M:%S')"
+start_time=$(date +%s)
 
 if [[ "$1" == "--h" || $# -lt 1 ]]; then
 	display_usage
@@ -98,7 +100,6 @@ mrconvert $dpath_fs/raw_dwi.nii $dpath_fs/raw_dwi.mif -fslgrad $dpath_fs/raw_dwi
 dwidenoise $dpath_fs/raw_dwi.mif $dpath_fs/dwi_den.mif
 mrconvert $dpath_fs/dwi_den.mif $dpath_fs/dwi_den.nii -fslgrad $dpath_fs/raw_dwi.bvec $dpath_fs/raw_dwi.bval
 
-
 echo -e "\e[32mPre-processing of the diffusion image data!"
 trac-all -prep -c /home/ubuntu/data/src_codes/tracula_config.txt
 
@@ -108,9 +109,27 @@ trac-all -bedp -c /home/ubuntu/data/src_codes/tracula_config.txt
 echo -e "\e[32mGenerate the probability distributions for all tracts!"
 trac-all -path -c /home/ubuntu/data/src_codes/tracula_config.txt
 
+echo -e "\e[32mJoint segmentation of thalamic nuclei from T1 scan and DTI!"
+segmentThalamicNuclei_DTI.sh -s $subject_id
+
+echo -e "\e[32mBayesian Segmentation with Histological Atlas "NextBrain""
+mkdir $SUBJECTS_DIR/$subject_id/hist
+mri_histo_atlas_segment_fireants $SUBJECTS_DIR/$subject_id/mri/T1.mgz \
+                                    $SUBJECTS_DIR/$subject_id/hist \
+                                    0 -1
+                                    
 
 
-## 3. now fix segmentThalamicNuclei_DTI.sh
+mv /scripts/* 
+
+end_time=$(date +%s)
+elapsed_time=$((end_time - start_time))
+echo "sMRI processing finished at $(date '+%Y-%m-%d %H:%M:%S')"
+echo "Elapsed time: $elapsed_time seconds"
+
+
+
+
 ## 4. now fix histological atlas
 ## 5. cerebellum (I need to ask this, but they are already in the folder in FS)
 ## 6. Striatal atlas (I need to ask this)
