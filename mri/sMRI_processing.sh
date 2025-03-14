@@ -69,13 +69,14 @@ raw_t2="$spath/sMRI/raw_anat_T2.nii"
 raw_dwi="$spath/dMRI/raw_dwi.rec"
 dpath_fs="$SUBJECTS_DIR/$subject_id/DTI"
 mni152_dir="$SUBJECTS_DIR/MNI152"
+choi_atlas="$FREESURFER_HOME/average/Choi_JNeurophysiol12_MNI152"
+buckner_atlas="$FREESURFER_HOME/average/Buckner_JNeurophysiol11_MNI152"
 
 ## cortical and subcortical segmentation
 if [[ "$recon_all" == "true" ]]; then
 	recon-all -s $subject_id -i $raw_t1
 	recon-all -all -subjid $subject_id  
 fi
-
 
 echo -e "\e[32mSegmentation of hippocampal subfields and nuclei of the amygdala!"
 echo -e "\e[33mwill take around 20 minutes ..."
@@ -97,7 +98,6 @@ segmentAAN.sh $subject_id
 echo -e "\e[32mSegmentation of the hypothalamus and its associated subunits"
 echo -e "\e[33mwill take around 25 minutes ..."
 mri_segment_hypothalamic_subunits --s $subject_id
-
 
 ## convert DTI to nii, then denoise it with mrtrix, then tracula
 mkdir $dpath_fs
@@ -139,87 +139,87 @@ for hemi in "${hemis[@]}"; do
 	done
 done
 
-
-## Striatal parcelation
+## striatal and cerebellum parcelations
 if [ -d "$mni152_dir" ]; then
     echo "MNI152 already been segmented."
+
 else
     recon-all -s MNI152 -i $FREESURFER_HOME/average/Choi_JNeurophysiol12_MNI152/FSL_MNI152_FreeSurferConformed_1mm.nii.gz -all
+
+    echo -e "\e[32mWarp the Choi_atlas to freesurfer nonlinear volumetric space!"
+    mkdir $SUBJECTS_DIR/MNI152/choi_atlas
+    mkdir $SUBJECTS_DIR/MNI152/buckner_atlas
+
+    mask_options=("Tight" "Loose")
+    ## striatum
+    for mask_option in "${mask_options[@]}"; do
+        mri_vol2vol --mov $choi_atlas/Choi2012_17NetworksConfidence_MNI152_FreeSurferConformed1mm_${mask_option}Mask.nii.gz \
+                    --s MNI152 \
+                    --targ $FREESURFER_HOME/average/mni305.cor.mgz \
+                    --m3z $SUBJECTS_DIR/MNI152/mri/transforms/talairach.m3z \
+                    --noDefM3zPath \
+                    --o $SUBJECTS_DIR/MNI152/choi_atlas/17_network_${mask_option}_mask.nii.gz \
+                    --interp nearest
+
+    ## cerebellum
+    for mask_option in "${mask_options[@]}"; do
+        mri_vol2vol --mov $buckner_atlas/Buckner2011_17NetworksConfidence_MNI152_FreeSurferConformed1mm_${mask_option}Mask.nii.gz \
+                    --s MNI152 \
+                    --targ $FREESURFER_HOME/average/mni305.cor.mgz \
+                    --m3z $SUBJECTS_DIR/MNI152/mri/transforms/talairach.m3z \
+                    --noDefM3zPath \
+                    --o $SUBJECTS_DIR/MNI152/buckner_atlas/17_network_${mask_option}_mask.nii.gz \
+                    --interp nearest
+
 fi
 
+# warp the Choi atlas from FreeSurfer internal space to subject’s native space
+echo -e "\e[32mStriatal parcellation!"
+mask_options=("Tight" "Loose")
+for mask_option in "${mask_options[@]}"; do
+    mri_vol2vol --mov $SUBJECTS_DIR/$subject_id/mri/norm.mgz \
+                --s $subject_id \
+                --targ $SUBJECTS_DIR/MNI152/choi_atlas/17_network_${mask_option}_mask.nii.gz \
+                --m3z $SUBJECTS_DIR/MNI152/mri/transforms/talairach.m3z \
+                --noDefM3zPath \
+                --o $SUBJECTS_DIR/$subject_id/mri/striatum_17_network_${mask_option}_mask.nii.gz \
+                --inv-morph \
+                --interp nearest
+            
+# warp the Buckner atlas from FreeSurfer internal space to subject’s native space
+echo -e "\e[32mCerebellum parcellation!"
+mask_options=("Tight" "Loose")
+for mask_option in "${mask_options[@]}"; do
+    mri_vol2vol --mov $SUBJECTS_DIR/$subject_id/mri/norm.mgz \
+                --s $subject_id \
+                --targ $SUBJECTS_DIR/MNI152/buckner_atlas/17_network_${mask_option}_mask.nii.gz \
+                --m3z $SUBJECTS_DIR/MNI152/mri/transforms/talairach.m3z \
+                --noDefM3zPath \
+                --o $SUBJECTS_DIR/$subject_id/mri/cerebellum_17_network_${mask_option}_mask.nii.gz \
+                --inv-morph \
+                --interp nearest
+
+## bem watershed
+echo -e "\e[32mCreate BEM surfaces using the watershed algorithm!"
+echo -e "\e[33mwill take around 4 minutes ..."
+mne watershed_bem -s $subject_id -d $SUBJECTS_DIR
 
 
-mri_vol2vol_used --mov Choi_atlas1mm.nii.gz --s MNI152_FS --targ 
->> $FREESURFER_HOME/average/mni305.cor.mgz --m3z talairach.m3z --o 
->> Choi_atlas_freesurfer_internal_space.nii.gz --interp nearest
-
-mri_vol2vol --mov $SUBJECTS_DIR/AD_SUBJECT_FS/mri/norm.mgz --s AD_SUBJECT_FS 
->> --targ Choi_atlas_freesurfer_internal_space.nii.gz --m3z talairach.m3z --o 
->> Choi_atlas_AD_subject.nii.gz --interp nearest --inv-morph
-
-
-
-
-
-## so maybe I need to increase instance size again, because hist needs at least 24 G memory.
+## add some swap space (very RAM hungry code...) (lets see what happens with 12G)
+sudo fallocate -l 12G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
 echo -e "\e[32mBayesian Segmentation with Histological Atlas "NextBrain""
 mkdir $SUBJECTS_DIR/$subject_id/hist
 mri_histo_atlas_segment_fireants $SUBJECTS_DIR/$subject_id/mri/T1.mgz \
                                     $SUBJECTS_DIR/$subject_id/hist \
-                                    0 2
+                                    0 1
                                     
+## maybe reset the swap here
 
 
-
-
-
-## 4. now fix histological atlas ???
-## 5. cerebellum (I need to ask this, but they are already in the folder in FS)
-## 6. Striatal atlas (I need to ask this)
 ## 7. add tables extraction
-
-
-
-
-
-#### cerebellum parcelation
-
-# Step 1: Upsample Buckner atlas from 2mm to 1mm resolution (matching MNI152 1mm template)
-mri_vol2vol --mov Buckner_atlas.nii.gz \
-            --targ MNI152/mri/norm.mgz \
-            --regheader \
-            --o Buckner_atlas1mm.nii.gz \
-            --no-save-reg \
-            --interp nearest
-
-# Step 2: Warp the upsampled atlas to FreeSurfer's nonlinear volumetric space
-mri_vol2vol_used --mov Buckner_atlas1mm.nii.gz \
-                --s MNI152_FS \
-                --targ $FREESURFER_HOME/average/mni305.cor.mgz \
-                --m3z talairach.m3z \
-                --o Buckner_atlas_freesurfer_internal_space.nii.gz \
-                --interp nearest
-
-# Step 3: Warp the atlas from FreeSurfer internal space to subject’s native space
-mri_vol2vol --mov $SUBJECTS_DIR/SUBJECT_FS/mri/norm.mgz \
-            --s SUBJECT_FS \
-            --targ Buckner_atlas_freesurfer_internal_space.nii.gz \
-            --m3ztalairach.m3z \
-            --o Buckner_atlas_subject.nii.gz \
-            --interp nearest \
-            --inv-morph
-
-
-
-
-
-
-## bem watershed
-echo -e "\e[32mCreate BEM surfaces using the watershed algorithm!"
-mne watershed_bem -s $subject_id -d $SUBJECTS_DIR
-
-##### tables
-
 ## extract DK atlas information
 measures=("area" "volume" "thickness")
 parcels=("aparc" "aparc.a2009s")

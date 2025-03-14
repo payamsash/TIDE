@@ -104,7 +104,7 @@ tcksift2 -act 5tt_coreg.mif -out_mu sift_mu.txt -out_coeffs sift_coeffs.txt
                                                     wmfod_norm.mif \
                                                     sift_1M.txt
 
-## Create a Connectome for Different Atlases
+## Create a Connectome for Different Atlases (add schaefer, and histological one)
 
 # aparc atlases (84 & 164)
 labelconvert $fs_dir/subjects/$subject_id/mri/aparc+aseg.mgz \ 
@@ -128,10 +128,3 @@ connectome2tck tracks_10M.tck assignments.txt edge_exemplar.tck -files single -e
 
 
 ### Connectome
-
-
-
-### plots
-# mrview of dwibiascorrect
-# quality of co-registration
-# mrview sub-02_den_preproc_unbiased.mif -overlay.load 5tt_nocoreg.mif -overlay.colourmap 2 -overlay.load 5tt_coreg.mif -overlay.colourmap 1
