@@ -10,3 +10,5 @@ dependencies:
   - tqdm
   - mne-icalabel
   - ipdb
+  - pyarrow
+  - pytables

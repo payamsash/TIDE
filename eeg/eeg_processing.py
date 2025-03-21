@@ -2,6 +2,7 @@
 # Email: payam.sadeghishabestari@uzh.ch
 
 import ipdb
+import pandas as pd
 import warnings
 from pathlib import Path
 from tqdm import tqdm
@@ -222,14 +223,14 @@ def run_rs_analysis(
             kwargs = {"subject": "fsaverage",
                     "subjects_dir": None
                     }
-            tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
+#            tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
             progress.update(1)
             fs_dir = fetch_fsaverage()
             trans = fs_dir / "bem" / "fsaverage-trans.fif"
             src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
             bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
 
-        tqdm.write("Computing forward solution ...\n")
+#        tqdm.write("Computing forward solution ...\n")
         progress.update(1)
         fwd = make_forward_solution(info,
                                     trans=trans,
@@ -238,12 +239,12 @@ def run_rs_analysis(
                                     meg=False,
                                     eeg=True
                                     )
-        tqdm.write("Using ad hoc noise covariance for the recording ...\n")
+#        tqdm.write("Using ad hoc noise covariance for the recording ...\n")
         progress.update(1)
         noise_cov = make_ad_hoc_cov(info)
 
         ## add a condition for GPIAS to use ad hoc noise covariance
-        tqdm.write("Computing the minimum-norm inverse solution ...\n")
+#        tqdm.write("Computing the minimum-norm inverse solution ...\n")
         progress.update(1)
         inverse_operator = make_inverse_operator(info,
                                                 fwd,
@@ -252,6 +253,7 @@ def run_rs_analysis(
         
         write_inverse_operator(fname=saving_dir / "operator-inv.fif",
                                 inv=inverse_operator,overwrite=overwrite)
+        
 
     ## create a report
     if create_report:
@@ -276,6 +278,28 @@ def run_rs_analysis(
         report.save(fname=f"{fname_report.as_posix()[:-3]}.html", open_browser=False, overwrite=True)
     
     tqdm.write("\033[32mAnalysis finished successfully!\n")
+
+    import mne
+    evoked = epochs_eo.average()
+#    info2 = evoked.info  # Now, info contains averaging details
+    snr = 3.0  # Signal-to-noise ratio
+    lambda2 = 1.0 / snr**2  # Regularization parameter
+    stc = mne.minimum_norm.apply_inverse(evoked, inverse_operator, lambda2, method='dSPM')
+    data = stc.data  # shape (n_sources, n_times)
+    times = stc.times  # Time points corresponding to the data
+
+    stc = mne.minimum_norm.apply_inverse(evoked, inverse_operator, lambda2, method='dSPM')
+    # Assuming you have already computed `stc`
+    df = pd.DataFrame(data=stc.data.T, index=stc.times, columns=[f"Source_{i}" for i in range(stc.data.shape[0])])
+    # Rename index for clarity
+    df.index.name = "Time (s)"
+
+    print(df.head())  # Display the first few rows
+    feather_file = subjects_dir / subject_id / "EEG" / "reports"/f"{paradigm}_source.feather")
+    df.to_feather(feather_file)
+    print(f"wrote to {feather_file}")
+
+
     progress.update(1)
     progress.close()
 
@@ -539,6 +563,26 @@ def run_erp_analysis(
             report.save(fname=f"{fname_report.as_posix()[:-3]}.html", open_browser=False, overwrite=True)
 
     tqdm.write("\033[32mAnalysis finished successfully!\n")
+#    ipdb.set_trace()
+#    #a try from Beat:
+#    snr = 3.0  # Signal-to-noise ratio
+#    lambda2 = 1.0 / snr**2  # Regularization parameter
+#    evoked = epochs_eo.average()
+#    info = evoked.info  # Now, info contains averaging details
+#    stc = mne.minimum_norm.apply_inverse(evoked, inverse_operator, lambda2, method='dSPM')
+#    data = stc.data  # shape (n_sources, n_times)
+#    times = stc.times
+#    # Assuming you have already computed `stc`
+#    df = pd.DataFrame(data=stc.data.T, index=stc.times, columns=[f"Source_{i}" for i in range(stc.data.shape[0])])
+#    # Rename index for clarity
+#    df.index.name = "Time (s)"
+#    pd_data_file = subjects_dir / subject_id / "EEG" / paradigm / f"{paradigm}_sources.feather"
+##    df.to_hdf( pd_data_file )
+#    df.to_feather( pd_data_file )
+#    print(f"wrote to {pd_data_file}.") 
+#    print(df.head())  # Display the first few rows
+    ipdb.set_trace()
+    ################################################################
     progress.update(1)
     progress.close()
 

@@ -1,9 +1,11 @@
 from shutil import copyfile
+import pandas as pd
 from pathlib import Path
 from eeg.eeg_preprocessing import preprocessing
 import logging
 from tqdm import tqdm
 from eeg.eeg_processing import run_rs_analysis
+import ipdb
 
 logging.basicConfig(level=logging.INFO)
 
@@ -53,6 +55,6 @@ if __name__=='__main__':
     #copy_flat_to_preprocessing_file_structure(subjects_dir)
 #    main_preproc(subjects_dir)
 
-    subjects_ids = [x.name for x in subjects_dir.glob('*')][-10:]
+    subjects_ids = [x.name for x in subjects_dir.glob('*')]
     for subject_id in tqdm(subjects_ids):
         run_rs_analysis(subject_id,subjects_dir,overwrite=True)#,paradigm='rest'
