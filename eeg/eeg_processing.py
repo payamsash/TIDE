@@ -295,7 +295,7 @@ def run_rs_analysis(
     df.index.name = "Time (s)"
 
     print(df.head())  # Display the first few rows
-    feather_file = subjects_dir / subject_id / "EEG" / "reports"/f"{paradigm}_source.feather")
+    feather_file = subjects_dir / subject_id / "EEG" / "reports"/f"{paradigm}_source.feather"
     df.to_feather(feather_file)
     print(f"wrote to {feather_file}")
 
