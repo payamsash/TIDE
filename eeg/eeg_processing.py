@@ -25,7 +25,8 @@ from mne import (set_log_level,
                 make_forward_solution,
                 make_ad_hoc_cov,
                 compute_covariance,
-                open_report
+                open_report,
+                concatenate_epochs
                 )
 
 def run_rs_analysis(
@@ -250,6 +251,9 @@ def run_rs_analysis(
         progress.update(1)
         fname_report = subjects_dir / subject_id / "EEG" / "reports" / f"{paradigm}.h5"
         report = open_report(fname_report)
+        epochs_concat = concatenate_epochs([epochs_ec, epochs_eo])
+        fig_drop = epochs_concat.plot_drop_log()
+        report.add_figure(fig=fig_drop, title="Epochs drop log", image_format="PNG")
 
         ## source space
         if source_analysis:
@@ -430,7 +434,7 @@ def run_erp_analysis(
     if saving_dir == None:
         saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
 
-    epochs.save(fname=saving_dir / "epochs-epo.fiff", overwrite=True)
+    epochs.save(fname=saving_dir / "epochs-epo.fif", overwrite=True)
 
     ## compute evokeds
     evs = epochs.average(by_event_type=True)
@@ -506,13 +510,16 @@ def run_erp_analysis(
             progress.update(1)
             fname_report = subjects_dir / subject_id / "EEG" / "reports" / f"{paradigm}.h5"
             report = open_report(fname_report)
-            for ev in evs:
-                fig_ev, ax = plt.subplots(1, 1, figsize=(7.5, 3))
-                ev.plot(time_unit="ms", titles="", axes=ax)
-                ax.set_title(ev.comment)
-                ax.spines[["right", "top"]].set_visible(False)
-                ax.axvspan(xmin=-200, xmax=0, ymin=-20, ymax=20, color="grey", alpha=0.2)
-                report.add_figure(fig=fig_ev, title="Evoked Response", image_format="PNG")
+            # for ev in evs:
+            #     fig_ev, ax = plt.subplots(1, 1, figsize=(7.5, 3))
+            #     ev.plot(time_unit="ms", titles="", axes=ax)
+            #     ax.set_title(ev.comment)
+            #     ax.spines[["right", "top"]].set_visible(False)
+            #     ax.axvspan(xmin=-200, xmax=0, ymin=-20, ymax=20, color="grey", alpha=0.2)
+            #     report.add_figure(fig=fig_ev, title="Evoked Response", image_format="PNG")
+
+            fig_drop = epochs.plot_drop_log()
+            report.add_figure(fig=fig_drop, title="Epochs drop log", image_format="PNG")
 
             ## source space
             if source_analysis:

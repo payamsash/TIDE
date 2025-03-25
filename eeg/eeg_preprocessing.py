@@ -24,6 +24,7 @@ from mne.preprocessing import (ICA,
 def preprocessing(
         subject_id,
         subjects_dir=None,
+        site="Zuerich",
         paradigm="gpias",
         manual_data_scroll=True,
         run_ica=False,
@@ -106,29 +107,50 @@ def preprocessing(
         subjects_dir = Path(subjects_dir)
 
     fname = subjects_dir / subject_id / "EEG" / paradigm / f"{subject_id}_{paradigm}.vhdr"
-    captrak_dir = subjects_dir / subject_id / "EEG" / "captrack"
     if not fname.exists():
         raise ValueError(f"Subject {subject_id}_{paradigm}.vhdr not found in the EEG directory!")
 
-    try:
-        for file_ck in os.listdir(captrak_dir):
-            if file_ck.endswith(".bvct"): 
-                montage = read_dig_captrak(file_ck)
-    except:
-        montage = make_standard_montage("easycap-M1")
+    match site:
+        # case "Austin": # edf format
+            # line_freq = 60
 
-    ch_types = {"O1": "eog",
-                "O2": "eog",
-                "PO7": "eog",
-                "PO8": "eog",
-                "Pulse": "ecg",
-                "Resp": "ecg",
-                "Audio": "stim"
-                }
+        # case "Dublin": # bdf format
+
+        # case "Ghent":
+
+        # case "Illinois": # cdt
+            # line_freq = 60
+
+        # case "Regensburg": # vhdr
+            # montage = make_standard_montage("easycap-M1")
+            # raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
+
+        # case "Tuebingen": # ctf
+
+        case "Zuerich": 
+            captrak_dir = subjects_dir / subject_id / "EEG" / "captrack"
+            try:
+                for file_ck in os.listdir(captrak_dir):
+                    if file_ck.endswith(".bvct"): 
+                        montage = read_dig_captrak(file_ck)
+            except:
+                montage = make_standard_montage("easycap-M1")
+
+            ch_types = {"O1": "eog",
+                        "O2": "eog",
+                        "PO7": "eog",
+                        "PO8": "eog",
+                        "Pulse": "ecg",
+                        "Resp": "ecg",
+                        "Audio": "stim"
+                        }
+            
+            raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
+            raw.set_channel_types(ch_types)
+            raw.pick(["eeg", "eog", "ecg", "stim"])
+            line_freq = 50
     
-    raw = read_raw_brainvision(vhdr_fname=fname)
-    raw.set_channel_types(ch_types)
-    raw.pick(["eeg", "eog", "ecg", "stim"])
+    
     raw.load_data()
     raw.set_montage(montage=montage)
 
@@ -139,7 +161,7 @@ def preprocessing(
 
     if paradigm.startswith("rest"):
         l_freq, h_freq = 0.1, 100
-        raw.notch_filter(freqs=50, picks="eeg")
+        raw.notch_filter(freqs=line_freq, picks="eeg", notch_widths=1)
     else:
         l_freq, h_freq = 1, 40
 
@@ -220,6 +242,7 @@ def preprocessing(
                                     ).average(picks="all")
         ## compute and apply projection
         ecg_projs, _ = compute_proj_ecg(raw, n_eeg=2, reject=None)
+        raw.add_proj(ecg_projs)
 
     if eog_correct:
         tqdm.write("Finding and removing vertical and horizontal EOG components...\n")
@@ -229,13 +252,15 @@ def preprocessing(
         ev_eog = create_eog_epochs(raw, ch_name=["PO7", "PO8"]).average(picks="all")
         ev_eog.apply_baseline((None, None))
         veog_projs, _ = compute_proj_eog(raw, n_eeg=2, reject=None)
+        raw.add_proj(veog_projs)
 
         ## horizontal
         ica = ICA(n_components=0.97, max_iter=800, method='infomax', fit_params=dict(extended=True))        
         ica.fit(raw)
         eog_indices, eog_scores = ica.find_bads_eog(raw, ch_name=["O1", "O2"], threshold=2)
-        heog_idxs = [eog_idx for eog_idx in eog_indices if eog_scores[0][eog_idx] * eog_scores[1][eog_idx] < 0]
-        fig_scores = ica.plot_scores(scores=eog_scores, exclude=eog_indices)
+        eog_indices_fil = [x for x in eog_indices if x <= 10]
+        heog_idxs = [eog_idx for eog_idx in eog_indices_fil if eog_scores[0][eog_idx] * eog_scores[1][eog_idx] < 0]
+        fig_scores = ica.plot_scores(scores=eog_scores, exclude=eog_indices_fil)
 
         if len(heog_idxs) > 0:
             eog_sac_components = ica.plot_properties(raw,
@@ -257,7 +282,7 @@ def preprocessing(
         report.add_raw(raw=raw, title="Recording Info", butterfly=False, psd=False)
 
         if run_ica:
-            if len(eog_indices) > 0:
+            if len(eog_indices_fil) > 0:
                 report.add_figure(fig=eog_components, title="EOG Components", image_format="PNG")
         
         if pulse_correct:
@@ -297,9 +322,37 @@ def preprocessing(
         report.save(fname=saving_dir.parent / "reports" / f"{paradigm}.h5", open_browser=False, overwrite=True)
 
     if not saving_dir is False:
-        raw.save(fname=saving_dir / "raw_prep.fif")
+        raw.save(fname=saving_dir / "raw_prep.fif", overwrite=True)
         
     tqdm.write("\033[32mEEG data were preprocessed sucessfully!\n")
     progress.update(1)
     progress.close()
 
+
+def _read_vhdr_input_fname(fname, subject_id, paradigm):
+    """
+    Checks .vhdr and .vmrk data to have same names, otherwise fix them.
+    """
+    try:
+        raw = read_raw_brainvision(fname)
+    except:
+        with open(fname, "r") as file:
+            lines = file.readlines()
+
+        lines[5] = f'DataFile={subject_id}_{paradigm}.eeg\n'
+        lines[6] = f'MarkerFile={subject_id}_{paradigm}.vmrk\n'
+        
+        with open(fname, "w") as file:
+            file.writelines(lines)
+
+        with open(f"{fname[:-4]}vmrk", "r") as file:
+            lines = file.readlines()
+
+        lines[4] = f'DataFile={subject_id}_{paradigm}.eeg\n'
+
+        with open(f"{fname[:-4]}vmrk", "w") as file:
+            file.writelines(lines)
+
+        raw = read_raw_brainvision(fname)
+
+    return raw
