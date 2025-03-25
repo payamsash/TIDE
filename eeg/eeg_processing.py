@@ -151,7 +151,7 @@ def run_rs_analysis(
         elif len(events) > 2:
             both_conditions = True
             print('Warning- please check eyes open and eyes closed events are assumptions!')
-            ipdb.set_trace()
+            ipdb.set_trace() # At this point, the code stops because event numbers 4 and 6 might not be eyes closed and eyes open, respectively. If they are, just press 'c<ENTER>' to continue.
             events_ec = events[:, 0][events[:, 2] == 6]  ## assume 6 is eyes closed
             events_eo = events[:, 0][events[:, 2] == 4]  ## assume 4 is eyes open
             skip=False # use this if the above events are properly assigned
