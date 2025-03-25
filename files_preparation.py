@@ -45,14 +45,14 @@ def create_subjects_dir(
 
     ## check if data are complete and fill subfolders
     raws_dir = Path(raws_dir)
-    mri_dir = raws_dir / "mri" / f"{subject_id}_antinomics"
+#    mri_dir = raws_dir / "mri" / f"{subject_id}_antinomics" #antinomics is not tide...
     eeg_dir = raws_dir / "eeg"
     captrack_dir = raws_dir / "captrack"
 
-    ipdb.set_trace()
-    for dir, title in zip([mri_dir, eeg_dir, captrack_dir], ["MRI", "EEG", "Captrack"]):
-        if not os.path.exists(dir):
-            os.mkdir(dir,exist_ok=True)
+#    ipdb.set_trace()
+    for dir, title in zip([eeg_dir],"EEG"):#zip([mri_dir, eeg_dir, captrack_dir],[ "EEG"] #["MRI", "EEG", "Captrack"]):
+        if not dir.exists():
+            dir.mkdir(exist_ok=True)
         if title == "MRI":
             _create_mri_folders(subject_id, mri_dir, subject_dir)
         if title == "EEG":

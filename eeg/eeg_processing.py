@@ -132,7 +132,7 @@ def run_rs_analysis(
         both_conditions = False
         events = events[0,:].reshape(1,-1)
         print('Warning- please check this')
-        ipdb.set_trace()
+        #ipdb.set_trace()
     if event_ids is None : # zurich device
         if len(events) == 0:
             print("This recording is only eyes open or eyes closed.")
@@ -151,7 +151,7 @@ def run_rs_analysis(
         elif len(events) > 2:
             both_conditions = True
             print('Warning- please check eyes open and eyes closed events are assumptions!')
-            ipdb.set_trace() # At this point, the code stops because event numbers 4 and 6 might not be eyes closed and eyes open, respectively. If they are, just press 'c<ENTER>' to continue.
+            #ipdb.set_trace() # At this point, the code stops because event numbers 4 and 6 might not be eyes closed and eyes open, respectively. If they are, just press 'c<ENTER>' to continue.
             events_ec = events[:, 0][events[:, 2] == 6]  ## assume 6 is eyes closed
             events_eo = events[:, 0][events[:, 2] == 4]  ## assume 4 is eyes open
             skip=False # use this if the above events are properly assigned
@@ -445,6 +445,9 @@ def run_erp_analysis(
 
             case "regularity" | "teas":
                 raise NotImplementedError
+            case _:
+                raise NotImplementedError
+                
     
     tqdm.write("Creating epochs...\n")
     progress.update(1)
@@ -587,7 +590,7 @@ def run_erp_analysis(
 #    df.to_feather( pd_data_file )
 #    print(f"wrote to {pd_data_file}.") 
 #    print(df.head())  # Display the first few rows
-    ipdb.set_trace()
+    #ipdb.set_trace()
     ################################################################
     progress.update(1)
     progress.close()

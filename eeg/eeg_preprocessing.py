@@ -131,6 +131,8 @@ def preprocessing(
                 }
     """
     
+    if 'replace_this_file' in fname.name: 
+        raise ValueError(f"Most likely, this is a failed test run: the file {fname} should no longer contain <replace_this_file>. Find a suitable .eeg file and replace it.")
     raw = read_raw_brainvision(vhdr_fname=fname)
 #    raw.set_channel_types(ch_types)
 #    raw.pick(["eeg", "eog", "ecg", "stim"])

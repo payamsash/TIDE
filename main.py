@@ -1,4 +1,5 @@
 from shutil import copyfile
+import warnings
 import pandas as pd
 from pathlib import Path
 from eeg.eeg_preprocessing import preprocessing
@@ -34,7 +35,7 @@ def copy_flat_to_preprocessing_file_structure(inputpath, outputpath):
     inputpath=Path(inputpath).expanduser() #expanduser: allow for Tilde ~ in path names
     outputpath=Path(outputpath).expanduser()
     if len([x for x in inputpath.glob('*.eeg')])==0:
-        print(f'No eeg files in {inputpath}')
+        print(f'No .eeg files in {inputpath}')
 
     for source in inputpath.glob('*.eeg'):
         for ext in ['.eeg','.vhdr','.vmrk']:
@@ -92,9 +93,13 @@ def main():
     for subject_id in tqdm(subjects_ids):
         run_rs_analysis(subject_id,subjects_dir,overwrite=True,write_feather=True)#,paradigm='rest'
 
-def test_preproc():
-    inputpath = Path('.').expanduser()/'data'/'subjects'
-    outputpath = Path('.').expanduser()/'data_out'/'subjects'
+def test_preproc(inputpath='.',outputpath='/tmp/data_out/'):
+    if len(list(inputpath.glob('*.eeg')))<2:
+        logging.warning(f'Expected lots of .eeg, .vhdr and .vmrk-files in the folder {inputpath}...?')
+    outputpath = Path(basepath).expanduser()/'data_out'/'subjects'
+    if outputpath.exists():
+        logging.warning(f'Directory {outputpath} already exists. Output will overwrite.')
+    logging.info(f'inputpath:{inputpath},\n{outputpath}:outputpath')
     outputpath.mkdir(exist_ok=True,parents=True)
     copy_flat_to_preprocessing_file_structure(inputpath,outputpath)
 
@@ -104,5 +109,13 @@ def test_preproc():
     for subject_id in tqdm(subjects_ids):
         run_rs_analysis(subject_id,outputpath,overwrite=True)#,paradigm='rest'
 
+
 if __name__=='__main__':
-    test_preproc()
+#    test_preproc()
+    basepath = '/tmp/' 
+    #the following test setup is suggested: 
+    # copy the folder data_in: cp -r data_in/ /tmp 
+    # copy the con1.eeg-file to /tmp/data_in/ and remove con1_replace_this_file.eeg 
+    inputpath = Path(basepath).expanduser()/'data_in'
+    outputpath = Path(basepath).expanduser()/'data_out'
+    test_preproc(inputpath,outputpath)
