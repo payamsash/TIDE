@@ -33,6 +33,7 @@ from mne import (set_log_level,
 def run_rs_analysis(
         subject_id,
         subjects_dir=None,
+        paradigm='rest',
         event_ids=None,
         source_analysis=True,
         mri=False,
@@ -41,7 +42,8 @@ def run_rs_analysis(
         create_report=True,
         saving_dir=None,
         verbose="ERROR",
-        overwrite=False
+        overwrite=False,
+        write_feather = False
         ):
     
     """ Sensor and source space analysis of the preprocessed resting-state eeg recordings from BrainVision device.
@@ -115,7 +117,6 @@ def run_rs_analysis(
     if subjects_fs_dir == None:
         subjects_fs_dir = "/Applications/freesurfer/7.4.1/subjects"
 
-    paradigm = f"rest"
     fname = subjects_dir / subject_id / "EEG" / paradigm / "raw_prep.fif"
     raw = read_raw_fif(fname, preload=True)
     info = raw.info
@@ -131,6 +132,7 @@ def run_rs_analysis(
         both_conditions = False
         events = events[0,:].reshape(1,-1)
         print('Warning- please check this')
+        ipdb.set_trace()
     if event_ids is None : # zurich device
         if len(events) == 0:
             print("This recording is only eyes open or eyes closed.")
@@ -148,9 +150,12 @@ def run_rs_analysis(
             skip=True
         elif len(events) > 2:
             both_conditions = True
+            print('Warning- please check eyes open and eyes closed events are assumptions!')
+            ipdb.set_trace()
             events_ec = events[:, 0][events[:, 2] == 6]  ## assume 6 is eyes closed
             events_eo = events[:, 0][events[:, 2] == 4]  ## assume 4 is eyes open
-            skip=False
+            skip=False # use this if the above events are properly assigned
+            skip=True #for now
     
     else: # add other sites here
         both_conditions = True
@@ -279,25 +284,26 @@ def run_rs_analysis(
     
     tqdm.write("\033[32mAnalysis finished successfully!\n")
 
-    import mne
-    evoked = epochs_eo.average()
-#    info2 = evoked.info  # Now, info contains averaging details
-    snr = 3.0  # Signal-to-noise ratio
-    lambda2 = 1.0 / snr**2  # Regularization parameter
-    stc = mne.minimum_norm.apply_inverse(evoked, inverse_operator, lambda2, method='dSPM')
-    data = stc.data  # shape (n_sources, n_times)
-    times = stc.times  # Time points corresponding to the data
+    if write_feather and not skip:
+        import mne
+        evoked = epochs_eo.average()
+    #    info2 = evoked.info  # Now, info contains averaging details
+        snr = 3.0  # Signal-to-noise ratio
+        lambda2 = 1.0 / snr**2  # Regularization parameter
+        stc = mne.minimum_norm.apply_inverse(evoked, inverse_operator, lambda2, method='dSPM')
+        data = stc.data  # shape (n_sources, n_times)
+        times = stc.times  # Time points corresponding to the data
 
-    stc = mne.minimum_norm.apply_inverse(evoked, inverse_operator, lambda2, method='dSPM')
-    # Assuming you have already computed `stc`
-    df = pd.DataFrame(data=stc.data.T, index=stc.times, columns=[f"Source_{i}" for i in range(stc.data.shape[0])])
-    # Rename index for clarity
-    df.index.name = "Time (s)"
+        stc = mne.minimum_norm.apply_inverse(evoked, inverse_operator, lambda2, method='dSPM')
+        # Assuming you have already computed `stc`
+        df = pd.DataFrame(data=stc.data.T, index=stc.times, columns=[f"Source_{i}" for i in range(stc.data.shape[0])])
+        # Rename index for clarity
+        df.index.name = "Time (s)"
 
-    print(df.head())  # Display the first few rows
-    feather_file = subjects_dir / subject_id / "EEG" / "reports"/f"{paradigm}_source.feather"
-    df.to_feather(feather_file)
-    print(f"wrote to {feather_file}")
+        print(df.head())  # Display the first few rows
+        feather_file = subjects_dir / subject_id / "EEG" / "reports"/f"{paradigm}_source.feather"
+        df.to_feather(feather_file)
+        print(f"wrote to {feather_file}")
 
 
     progress.update(1)

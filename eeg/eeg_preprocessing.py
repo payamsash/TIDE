@@ -101,7 +101,8 @@ def preprocessing(
     time.sleep(1)
     tqdm.write("Loading raw EEG data ...\n")
     progress.update(1)
-
+    if saving_dir is not None :
+        saving_dir = Path(saving_dir)   
     if subjects_dir == None:
         subjects_dir = Path.cwd().parent / "subjects"
     else:
@@ -134,7 +135,13 @@ def preprocessing(
 #    raw.set_channel_types(ch_types)
 #    raw.pick(["eeg", "eog", "ecg", "stim"])
     raw.load_data()
-    raw.set_montage(montage=montage,match_case=False)
+    try:
+        raw.set_montage(montage=montage,match_case=False)
+    except ValueError as err: 
+        print(err)
+        print('dropping channels')
+        raw.drop_channels(['HRli', 'HRre'])
+        raw.set_montage(montage=montage,match_case=False)
 
     ## resampling, filtering and re-referencing 
     tqdm.write("Resampling, filtering and re-referencing ...\n")

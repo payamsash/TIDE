@@ -49,16 +49,19 @@ def create_subjects_dir(
     eeg_dir = raws_dir / "eeg"
     captrack_dir = raws_dir / "captrack"
 
+    ipdb.set_trace()
     for dir, title in zip([mri_dir, eeg_dir, captrack_dir], ["MRI", "EEG", "Captrack"]):
-        if os.path.exists(dir):
-            if title == "MRI":
-                _create_mri_folders(subject_id, mri_dir, subject_dir)
-            if title == "EEG":
-                _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_list)
+        if not os.path.exists(dir):
+            os.mkdir(dir,exist_ok=True)
+        if title == "MRI":
+            _create_mri_folders(subject_id, mri_dir, subject_dir)
+        if title == "EEG":
+            _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_list)
         else:
             if on_missing == "warn":
+                warnings.warn(f"Expected to see a directory {subjects_dir}", UserWarning)
                 warnings.warn(f"Subject {subject_id} not found in the {title} directory!", UserWarning)
-            if on_missing == "raise":
+            else: #if on_missing == "raise":
                 raise ValueError(f"Subject {subject_id} not found in the {title} directory!")     
 
 
@@ -160,8 +163,6 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_lis
                 if f"_{paradigm}" in fname or f"-{paradigm}" in fname:
                     if not (dest_paths[paradigm] / paradigm).exists():
                         print(f"Moving EEG paradigm {paradigm} ...")
-                        print(f"copying from {eeg_dir / fname} to {subject_dir / 'EEG' / paradigm}")
-                        ipdb.set_trace()
                         shutil.copy(eeg_dir / fname, subject_dir / "EEG" / paradigm)
 
     ## only for rest. -> rest_v1
@@ -169,12 +170,8 @@ def _create_eeg_folders(subject_id, eeg_dir, captrack_dir, subject_dir, skip_lis
         shutil.move(subject_dir / "EEG" / "rest.", subject_dir / "EEG" / "rest_v1")
     except:
         print("rest_v1 already exist.")
-        print(subject_dir / "EEG" / "rest_v1")
 
     ## captrack data
-    captrack_dir = Path(captrack_dir)
-    if not captrack_dir.exists():
-        captrack_dir.mkdir(exist_ok=True)
     fnames = os.listdir(captrack_dir)
     for fname in fnames:
         if f"_{subject_id}." in fname:
