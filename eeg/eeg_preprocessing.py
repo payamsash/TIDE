@@ -312,7 +312,8 @@ def preprocessing(
         reports_dir.mkdir(exist_ok=True)
         report.save(fname=reports_dir/ f"{paradigm}.h5", open_browser=False, overwrite=True)
 
-    raw.save(fname=saving_dir / "raw_prep.fif",overwrite = overwrite)
+    if not saving_dir is False:
+        raw.save(fname=saving_dir / "raw_prep.fif")
         
     tqdm.write("\033[32mEEG data were preprocessed sucessfully!\n")
     progress.update(1)
