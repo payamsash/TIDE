@@ -136,7 +136,7 @@ def run_rs_analysis(
         elif len(events) == 1:
             print("This recording is only eyes open or eyes closed.")
             both_conditions = False
-            tmin = max(events[0] / info["sfreq"] + 3, 5) # 3 seconds skip
+            tmin = max(np.squeeze(events)[0] / info["sfreq"] + 3, 5) # 3 seconds skip
             raw.crop(tmin=tmin)
             epochs_eo = make_fixed_length_epochs(raw, duration=2)
 
@@ -251,7 +251,10 @@ def run_rs_analysis(
         progress.update(1)
         fname_report = subjects_dir / subject_id / "EEG" / "reports" / f"{paradigm}.h5"
         report = open_report(fname_report)
-        epochs_concat = concatenate_epochs([epochs_ec, epochs_eo])
+        if both_conditions:
+            epochs_concat = concatenate_epochs([epochs_ec, epochs_eo])
+        else:
+            epochs_concat = epochs_eo
         fig_drop = epochs_concat.plot_drop_log()
         report.add_figure(fig=fig_drop, title="Epochs drop log", image_format="PNG")
 

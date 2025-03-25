@@ -121,9 +121,12 @@ def preprocessing(
         # case "Illinois": # cdt
             # line_freq = 60
 
-        # case "Regensburg": # vhdr
-            # montage = make_standard_montage("easycap-M1")
-            # raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
+        case "Regensburg": # vhdr
+            raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
+            montage = make_standard_montage("easycap-M1")
+            raw.pick(["eeg", "stim"])
+            line_freq = 50
+
 
         # case "Tuebingen": # ctf
 
@@ -152,7 +155,7 @@ def preprocessing(
     
     
     raw.load_data()
-    raw.set_montage(montage=montage)
+    raw.set_montage(montage=montage, match_case=False)
 
     ## resampling, filtering and re-referencing 
     tqdm.write("Resampling, filtering and re-referencing ...\n")
@@ -226,7 +229,8 @@ def preprocessing(
                                                 picks=eog_indices,
                                                 show=False,
                                                 )
-        ica.apply(raw, exclude=eog_indices)
+            eog_indices_fil = [x for x in eog_indices if x <= 10]
+        ica.apply(raw, exclude=eog_indices_fil)
     
     if pulse_correct:
         tqdm.write("Finding and removing ECG related components...\n")
