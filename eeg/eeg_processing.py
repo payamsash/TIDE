@@ -8,6 +8,7 @@ import time
 
 import numpy as np
 from scipy.signal import find_peaks
+from autoreject import AutoReject
 import matplotlib.pyplot as plt
 
 from mne.io import read_raw_fif
@@ -38,6 +39,7 @@ def run_rs_analysis(
         mri=False,
         subjects_fs_dir=None,
         manual_data_scroll=False,
+        automatic_epoch_rejection=False,
         create_report=True,
         saving_dir=None,
         verbose="ERROR"
@@ -181,7 +183,21 @@ def run_rs_analysis(
     if saving_dir is None:
         saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
 
-    ## save epochs
+    ## drop and save epochs
+    if not automatic_epoch_rejection == False:
+        if automatic_epoch_rejection == "ptp":
+            reject = dict(eeg=40e-6)
+            flat = dict(eeg=1e-7)
+            epochs_eo.drop_bad(reject=reject, flat=flat)
+
+        if automatic_epoch_rejection == "autoreject":
+            ar = AutoReject()
+            ar.fit(epochs_eo)
+            epochs_eo = ar.transform(epochs_eo)
+
+        if automatic_epoch_rejection == "pyriemann":
+            raise NotImplementedError
+
     epochs_eo.save(fname=saving_dir / f"epochs-eo-epo.fif", overwrite=True)
     if both_conditions:
         epochs_ec.save(fname=saving_dir / f"epochs-ec-epo.fif", overwrite=True)
@@ -288,6 +304,7 @@ def run_erp_analysis(
         mri=False,
         subjects_fs_dir=None,
         manual_data_scroll=False,
+        automatic_epoch_rejection=False,
         create_report=True,
         saving_dir=None,
         verbose="ERROR"
@@ -436,6 +453,21 @@ def run_erp_analysis(
 
     if saving_dir == None:
         saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
+
+    ## drop and save epochs
+    if not automatic_epoch_rejection == False:
+        if automatic_epoch_rejection == "ptp":
+            reject = dict(eeg=40e-6)
+            flat = dict(eeg=1e-7)
+            epochs.drop_bad(reject=reject, flat=flat)
+
+        if automatic_epoch_rejection == "autoreject":
+            ar = AutoReject()
+            ar.fit(epochs)
+            epochs = ar.transform(epochs)
+
+        if automatic_epoch_rejection == "pyriemann":
+            raise NotImplementedError
 
     epochs.save(fname=saving_dir / "epochs-epo.fif", overwrite=True)
 

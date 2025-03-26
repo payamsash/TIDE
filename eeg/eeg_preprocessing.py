@@ -9,9 +9,9 @@ import time
 import matplotlib.pyplot as plt
 import customtkinter as ctk
 
-from mne import set_log_level, Report
+from mne import set_log_level, Report, concatenate_raws
 from mne_icalabel import label_components
-from mne.io import read_raw_brainvision
+from mne.io import read_raw
 from mne.channels import read_dig_captrak, make_standard_montage
 from mne.viz import plot_projs_joint
 from mne.preprocessing import (ICA,
@@ -58,6 +58,8 @@ def preprocessing(
                 ├── paradigm_1/
                 ├── paradigm_2/
                 ├── ...
+        site : str
+            The recording site; must be one of the following: ["Austin", "Dublin", "Ghent", "Illinois", "Regensburg", "Tuebingen"]
         paradigm : str
             Name of the EEG paradigm. should be a subfolder in the subjects_dir / subject_id containing
             raw EEG data.
@@ -105,32 +107,51 @@ def preprocessing(
         subjects_dir = Path.cwd().parent / "subjects"
     else:
         subjects_dir = Path(subjects_dir)
+    
+    sites = ["Austin", "Dublin", "Ghent", "Illinois", "Regensburg", "Tuebingen", "Zuerich"]
+    if site not in sites:
+        raise ValueError(f"site option must be one of {sites}, got {site} instead.")
 
-    fname = subjects_dir / subject_id / "EEG" / paradigm / f"{subject_id}_{paradigm}.vhdr"
-    if not fname.exists():
-        raise ValueError(f"Subject {subject_id}_{paradigm}.vhdr not found in the EEG directory!")
+    fname_paradigm = subjects_dir / subject_id / "EEG" / paradigm 
+    fnames = [f for f in sorted(os.listdir(fname_paradigm)) if not f.startswith(".")]
+    assert len(fnames) > 0, f"EEG data not found in this directory: {fname_paradigm}!"
 
     match site:
-        # case "Austin": # edf format
-            # line_freq = 60
+        case "Austin":
+            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".edf")]
+            raw = concatenate_raws(raws)
+            raw.rename_channels(mapping=lambda s: s[:1] + s[4:])
+            montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
-        # case "Dublin": # bdf format
+        case "Dublin":
+            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".bdf")]
+            raw = concatenate_raws(raws)
+            raw.pick(["eeg", "stim"])
+            montage = make_standard_montage("easycap-M1")
 
-        # case "Ghent":
+        case "Ghent":
+            raise NotImplementedError
 
-        # case "Illinois": # cdt
-            # line_freq = 60
-
-        case "Regensburg": # vhdr
-            raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
+        case "Illinois": # curry ** last thing to check **
+            raise NotImplementedError
+            
+        case "Regensburg":
+            raws = []
+            for fname in fnames:
+                if fname.endswith(".vhdr"):
+                    raws.append(_read_vhdr_input_fname(fname, subject_id, paradigm))
+            raw = concatenate_raws(raws)
             montage = make_standard_montage("easycap-M1")
             raw.pick(["eeg", "stim"])
-            line_freq = 50
 
-
-        # case "Tuebingen": # ctf
+        case "Tuebingen": # ctf
+            raise NotImplementedError
 
         case "Zuerich": 
+            fname = fname_paradigm / f"{subject_id}_{paradigm}.vhdr"
+            if not fname.exists():
+                raise ValueError(f"Subject {subject_id}_{paradigm}.vhdr not found in the EEG directory!")
+            
             captrak_dir = subjects_dir / subject_id / "EEG" / "captrack"
             try:
                 for file_ck in os.listdir(captrak_dir):
@@ -151,11 +172,9 @@ def preprocessing(
             raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
             raw.set_channel_types(ch_types)
             raw.pick(["eeg", "eog", "ecg", "stim"])
-            line_freq = 50
-    
     
     raw.load_data()
-    raw.set_montage(montage=montage, match_case=False)
+    raw.set_montage(montage=montage, match_case=False, on_missing="warn")
 
     ## resampling, filtering and re-referencing 
     tqdm.write("Resampling, filtering and re-referencing ...\n")
@@ -164,6 +183,10 @@ def preprocessing(
 
     if paradigm.startswith("rest"):
         l_freq, h_freq = 0.1, 100
+        if site in ["Illinois", "Austin"]:
+            line_freq = 60
+        else:
+            line_freq = 50
         raw.notch_filter(freqs=line_freq, picks="eeg", notch_widths=1)
     else:
         l_freq, h_freq = 1, 40
@@ -338,25 +361,22 @@ def _read_vhdr_input_fname(fname, subject_id, paradigm):
     Checks .vhdr and .vmrk data to have same names, otherwise fix them.
     """
     try:
-        raw = read_raw_brainvision(fname)
+        raw = read_raw(fname)
     except:
         with open(fname, "r") as file:
             lines = file.readlines()
 
         lines[5] = f'DataFile={subject_id}_{paradigm}.eeg\n'
         lines[6] = f'MarkerFile={subject_id}_{paradigm}.vmrk\n'
-        
+
         with open(fname, "w") as file:
             file.writelines(lines)
-
-        with open(f"{fname[:-4]}vmrk", "r") as file:
+        with open(f"{str(fname)[:-4]}vmrk", "r") as file:
             lines = file.readlines()
 
         lines[4] = f'DataFile={subject_id}_{paradigm}.eeg\n'
-
-        with open(f"{fname[:-4]}vmrk", "w") as file:
+        with open(f"{str(fname)[:-4]}vmrk", "w") as file:
             file.writelines(lines)
 
-        raw = read_raw_brainvision(fname)
-
+        raw = read_raw(fname)
     return raw
