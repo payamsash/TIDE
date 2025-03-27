@@ -26,12 +26,13 @@ def preprocessing(
         subjects_dir=None,
         site="Zuerich",
         paradigm="gpias",
+        psd_check=True,
         manual_data_scroll=True,
         run_ica=False,
         manual_ica_removal=False,
         eog_correct=True,
-        resp_correct=True,
         pulse_correct=True,
+        resp_correct=True,
         create_report=True,
         saving_dir=None,
         verbose="ERROR"
@@ -144,8 +145,10 @@ def preprocessing(
             montage = make_standard_montage("easycap-M1")
             raw.pick(["eeg", "stim"])
 
-        case "Tuebingen": # ctf
-            raise NotImplementedError
+        case "Tuebingen":
+            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".ds")]
+            raw = concatenate_raws(raws)
+            raw.pick(["eeg", "stim"])
 
         case "Zuerich": 
             fname = fname_paradigm / f"{subject_id}_{paradigm}.vhdr"
@@ -196,10 +199,17 @@ def preprocessing(
     raw.apply_proj()
     
     ## eeg plotting for annotating
+    if psd_check:
+        fig, ax = plt.subplots(1, 1, figsize=(10, 4))
+        raw.plot_psd(picks="eeg", fmin=0.1, fmax=120, ax=ax)
+        while plt.fignum_exists(fig.number):
+            plt.pause(0.1)
+
     if manual_data_scroll:
         raw.annotations.append(onset=0, duration=0, description="bad_segment")
         raw.plot(duration=20.0, n_channels=80, picks="eeg", scalings=dict(eeg=40e-6), block=True)
-
+    raw.interpolate_bads()
+    
     ## ICA
     if run_ica:
         tqdm.write("Running ICA ...\n")
@@ -306,7 +316,7 @@ def preprocessing(
     progress.update(1)
     if create_report:
         report = Report(title=f"report_subject_{subject_id}")
-        report.add_raw(raw=raw, title="Recording Info", butterfly=False, psd=False)
+        report.add_raw(raw=raw, title="Recording Info", butterfly=False, psd=True)
 
         if run_ica:
             if len(eog_indices_fil) > 0:
