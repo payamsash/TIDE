@@ -84,10 +84,10 @@ def main():
     outputpath = subjects_dir 
     copy_flat_to_preprocessing_file_structure(inputpath1,outputpath)
 
-    inputpath2 = tidepath/'project_t'
-    outputpath = subjects_dir 
-    copy_flat_to_preprocessing_file_structure(inputpath2,outputpath)
-#    main_preproc(subjects_dir)
+#    inputpath2 = tidepath/'project_t'
+#    outputpath = subjects_dir 
+#    copy_flat_to_preprocessing_file_structure(inputpath2,outputpath)
+    main_preproc(subjects_dir)
 
     subjects_ids = [x.name for x in subjects_dir.glob('*')]
     for subject_id in tqdm(subjects_ids):
@@ -111,11 +111,17 @@ def test_preproc(inputpath='.',outputpath='/tmp/data_out/'):
 
 
 if __name__=='__main__':
-#    test_preproc()
-    basepath = '/tmp/' 
-    #the following test setup is suggested: 
-    # copy the folder data_in: cp -r data_in/ /tmp 
-    # copy the con1.eeg-file to /tmp/data_in/ and remove con1_replace_this_file.eeg 
-    inputpath = Path(basepath).expanduser()/'data_in'
-    outputpath = Path(basepath).expanduser()/'data_out'
-    test_preproc(inputpath,outputpath)
+    #this code runs in two versions: a test/demo version (alternative 1), and with a larger dataset project_n
+    alternative = 1
+    if alternative==1:
+        basepath = '/tmp/' 
+        #the following test setup is suggested: 
+        # copy the folder data_in/ to basepath:: cp -r data_in/ /tmp/
+        # copy the con1.eeg-file into /tmp/data_in/ and remove con1_replace_this_file.eeg 
+        #then run python main.py
+        inputpath = Path(basepath).expanduser()/'data_in'
+        outputpath = Path(basepath).expanduser()/'data_out'
+        test_preproc(inputpath,outputpath)
+    elif alternative==2:
+        main()
+    print('Main execution is done.')
