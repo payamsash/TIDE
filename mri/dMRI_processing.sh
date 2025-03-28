@@ -22,11 +22,9 @@ display_usage() {
     echo " "
     echo " "
     echo " "
-    echo "CORTICAL AND SUBCORTICAL SEGMENTATION OF T1 IMAGE (+T2 +DWI)"
+    echo "Diffusion MRI analyses, including spherical deconvolution and tractography"
     echo " "
-	echo "This script uses Freesurfer for cortical and subcortical segmentation"
-    echo "This script uses Freesurfer for cortical and subcortical segmentation"
-    echo "as well as extracting probabilistic white matter tracts in multiple steps:"
+	echo "This script uses MRtrix3 for tractography and creating connectomics"
     echo " "
     echo "1. Segmentation of hippocampal subfields and nuclei of the amygdala using an additional T2 scan"
     echo " "
@@ -48,38 +46,36 @@ display_usage() {
     echo " " 
 	}
 
-if [[ "$1" == "--h" || $# -lt 2 ]]; then
+
+echo "dMRI processing started at $(date '+%Y-%m-%d %H:%M:%S')"
+start_time=$(date +%s)
+
+if [[ "$1" == "--h" || $# -lt 1 ]]; then
 	display_usage
 	exit 1
 fi
 
 subject_id=$1
-subjects_dir=$2
-saving_dir=$3
+
+## check if structural analysis have been done!
+if [ ! -d "/home/ubuntu/data/subjects_fs_dir/$subject_id" ]; then
+    echo "Please run the sMRI_processing.sh script before running this script." >&2
+    exit 1
+else
+    mkdir /home/ubuntu/data/subjects_mrtrix_dir/$subject_id
+    subject_dir="/home/ubuntu/data/subjects_mrtrix_dir/$subject_id"
+    export PATH=/usr/lib/mrtrix3/bin:$PATH
 
 ## set Paths
-raw_dwi="$subjects_dir/$subject_id/dMRI/raw_dwi.rec"
-raw_anat="$subjects_dir/$subject_id/sMRI/raw_anat.nii"
-default_saving_dir="/home/ubuntu/data/subjects_mrtrix_dir/$subject"
+spath="/home/ubuntu/data/subjects_raw/$subject_id"
+raw_dwi="$spath/dMRI/raw_dwi.rec"
+raw_anat="$spath/sMRI/raw_anat.nii"
 fs_dir="/usr/local/freesurfer/8.0.0"
-luts_dir="/usr/local/mrtrix3/share/mrtrix3/labelconvert" # should be updated
+luts_dir="/usr/local/mrtrix3/share/mrtrix3/labelconvert" # should be sent to vm
 
-
-
-
-if [ -n "$saving_dir" ]; then
-    if [ ! -d "$saving_dir" ]; then
-        mkdir -p "$saving_dir"
-    fi
-    cd "$saving_dir"
-else
-    if [ ! -d "$default_saving_dir" ]; then
-        mkdir -p "$default_saving_dir"
-    fi
-    cd "$default_saving_dir"
-fi
-
-dcm2niix -f raw_dwi -o . $raw_dwi
+## Conversion
+dcm2niix -f raw_dwi -o $subject_dir $raw_dwi
+cd $subject_dir
 mrconvert raw_dwi.nii raw_dwi.mif -fslgrad raw_dwi.bvec raw_dwi.bval
 echo -e "\e[32mRecording file is converted to nifti and mif formats successfuly!"
 
@@ -87,9 +83,13 @@ echo -e "\e[32mRecording file is converted to nifti and mif formats successfuly!
 dwidenoise raw_dwi.mif dwi_den.mif -noise noise.mif
 mrcalc raw_dwi.mif dwi_den.mif -subtract residual.mif
 mrdegibbs dwi_den.mif dwi_den_gibb.mif
-dwifslpreproc dwi_den_gibb.mif dwi_den_preproc.mif -pe_dir ap -rpe_none  # check this (roger says its okay)
+dwifslpreproc dwi_den_gibb.mif dwi_den_preproc.mif -pe_dir ap -rpe_none  # (roger says its okay) (download anf substitute)
 dwibiascorrect ants dwi_den_preproc.mif dwi_den_preproc_unbiased.mif -bias bias.mif # check this if it makes things better or worse
 echo -e "\e[32mPreprocessing is done successfuly!"
+
+
+wget https://github.com/MRtrix3/mrtrix3/blob/master/bin/dwifslpreproc
+
 
 ### Constrained Spherical Deconvolution
 dwi2mask dwi_den_preproc.mif mask.mif
