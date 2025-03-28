@@ -7,10 +7,11 @@ from ast import literal_eval
 from tqdm import tqdm
 import time
 import matplotlib.pyplot as plt
-import customtkinter as ctk
+# import customtkinter as ctk
 
 from mne import set_log_level, Report, concatenate_raws
 from mne_icalabel import label_components
+from mne_icalabel.gui import label_ica_components
 from mne.io import read_raw
 from mne.channels import read_dig_captrak, make_standard_montage
 from mne.viz import plot_projs_joint
@@ -140,7 +141,7 @@ def preprocessing(
             raws = []
             for fname in fnames:
                 if fname.endswith(".vhdr"):
-                    raws.append(_read_vhdr_input_fname(fname, subject_id, paradigm))
+                    raws.append(_read_vhdr_input_fname(fname_paradigm / fname, subject_id, paradigm))
             raw = concatenate_raws(raws)
             montage = make_standard_montage("easycap-M1")
             raw.pick(["eeg", "stim"])
@@ -178,6 +179,7 @@ def preprocessing(
     
     raw.load_data()
     raw.set_montage(montage=montage, match_case=False, on_missing="warn")
+    raw.info["subject_info"] = {"his_id": site}
 
     ## resampling, filtering and re-referencing 
     tqdm.write("Resampling, filtering and re-referencing ...\n")
@@ -222,33 +224,8 @@ def preprocessing(
             ica.fit(raw)
 
         if manual_ica_removal:
-            ica.plot_properties(raw)
-            ctk.set_appearance_mode("Dark")
-            ctk.set_default_color_theme("blue")  
-            app = ctk.CTk()
-            app.title("Remove ICA Components")
-            app.geometry("500x300")
-            eog_indices = None
-            label = ctk.CTkLabel(app, text="Enter a list of ICA component indices to remove from the data\n\nfor example: [0, 2]",
-                                font=("Arial", 14, "bold"))
-            label.pack(pady=20)
-            entry = ctk.CTkEntry(app, placeholder_text="Enter a list")
-            entry.pack(pady=20)
-
-            def on_button_click():
-                global eog_indices
-                try:
-                    eog_indices = literal_eval(entry.get())
-                    label_result.configure(text=f"Selected components are removed from data")
-                except ValueError:
-                    label_result.configure(text="Please enter a valid list of numbers")
-                # app.quit() # fails in mac, but might work in windows
-                
-            button = ctk.CTkButton(app, text="Apply", command=on_button_click)
-            button.pack()
-            label_result = ctk.CTkLabel(app, text="")
-            label_result.pack(pady=20)
-            app.mainloop()
+            gui = label_ica_components(raw, ica, block=True)
+            eog_indices = ica.labels_["eog"]
 
         else:
             ic_dict = label_components(raw, ica, method="iclabel")

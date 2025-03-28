@@ -19,7 +19,6 @@ from mne import (set_log_level,
 def extract_eeg_features(
         subject_id,
         subjects_dir=None,
-        site="zurich",
         features=["pow_freq_bands", "spect_entropy"],
         paradigm="rest_v1",
         atlas="aparc",
@@ -57,16 +56,16 @@ def extract_eeg_features(
 
     ## read the epochs
     epochs_fnames = []
-    epochs_eo_fname = subjects_dir / subject_id / paradigm / "epochs-eo-epo.fif"
-    epochs_ec_fname = subjects_dir / subject_id / paradigm / "epochs-ec-epo.fif"
+    epochs_eo_fname = subjects_dir / subject_id / "EEG" / paradigm / "epochs-eo-epo.fif"
+    epochs_ec_fname = subjects_dir / subject_id / "EEG" / paradigm / "epochs-ec-epo.fif"
     
-    if not epochs_eo_fname.isfile():
-        raise ValueError(f"Eyes open epochs don't exist in this directory: {subjects_dir / subject_id / paradigm}")
+    if not epochs_eo_fname.exists():
+        raise ValueError(f"Eyes open epochs don't exist in the directory")
     else:
         epochs_fnames.append(epochs_eo_fname)
 
-    if not epochs_ec_fname.isfile():
-        warnings.warn(f"Eyes closed epochs dont exist in this directory: {subjects_dir / subject_id / paradigm}")
+    if not epochs_ec_fname.exists():
+        warnings.warn(f"Eyes closed epochs dont exist in this directory")
     else:
         epochs_fnames.append(epochs_ec_fname)
     
@@ -79,6 +78,7 @@ def extract_eeg_features(
         eye_labels += len(eps) * [title]
 
     epochs = concatenate_epochs(epochs)
+    site = epochs.info["subject_info"]["his_id"]
 
     ## initialize feature extraction
     ch_names = epochs.info["ch_names"]

@@ -15,13 +15,37 @@
 
 set -e
 display_usage() {
-	echo "$(basename $0) [subject_id] [subjects_dir] [saving_dir]"
-	echo "This script uses MRtrix to analyze diffusion data.
-            as well as extracting probabilistic white matter tracts:
-			1) The diffusion image (.rec / .nii format);
-			2) The structural T1 image (.rec / .nii format);
-			3) The subject ID number;
-			4) Path to a directory to save anatomical data of the subject. If not provided, the default directory will be used;" 
+	echo "$(basename $0) [subject_id]"
+    echo " "
+    echo "Usage:"
+    echo "[subject_id] -> The subject ID"
+    echo " "
+    echo " "
+    echo " "
+    echo "CORTICAL AND SUBCORTICAL SEGMENTATION OF T1 IMAGE (+T2 +DWI)"
+    echo " "
+	echo "This script uses Freesurfer for cortical and subcortical segmentation"
+    echo "This script uses Freesurfer for cortical and subcortical segmentation"
+    echo "as well as extracting probabilistic white matter tracts in multiple steps:"
+    echo " "
+    echo "1. Segmentation of hippocampal subfields and nuclei of the amygdala using an additional T2 scan"
+    echo " "
+    echo "2. Segmentation of Brainstem Substructures"
+    echo " "
+    echo "3. Segmentation of thalamic nuclei using only T1 image"
+    echo " "
+    echo "4. Segmentations of brainstem nuclei that are part of the Ascending Arousal Network"
+    echo " "
+    echo "5. Segmentation of the hypothalamus and its associated subunits"
+    echo " "
+    echo "RUNNING TRACULA TO EXTRACT PROBABLISTIC WHITE MATTER TRACTS"
+    echo " "
+    echo "1. Pre-processing of the diffusion image data."
+    echo " "
+    echo "2. Ball-and-stick model fit to reconstruct the pathways from the DWI data."
+    echo " "
+    echo "3. Generate the probability distributions for all tracts."
+    echo " " 
 	}
 
 if [[ "$1" == "--h" || $# -lt 2 ]]; then

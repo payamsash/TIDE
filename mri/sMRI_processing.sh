@@ -206,7 +206,7 @@ mne watershed_bem -s $subject_id -d $SUBJECTS_DIR
 
 
 ## add some swap space (very RAM hungry code...) (lets see what happens with 12G)
-sudo fallocate -l 12G /swapfile
+sudo fallocate -l 32G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
