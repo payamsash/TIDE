@@ -1,0 +1,43 @@
+Metadata-Version: 2.3
+Name: pymatreader
+Version: 1.0.0
+Summary: Convenient reader for Matlab mat files
+Author-email: Thomas Hartmann <thomas.hartmann@th-ht.de>, Dirk Gütlin <dirk.guetlin@fu-berlin.de>
+License: BSD-2-Clause
+License-File: LICENSE
+Keywords: Matlab HDF5 import
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: BSD License
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Classifier: Typing :: Typed
+Requires-Python: >=3.9
+Requires-Dist: h5py
+Requires-Dist: numpy
+Requires-Dist: scipy>=1.7.1
+Requires-Dist: xmltodict
+Description-Content-Type: text/markdown
+
+# pymatreader
+A Python module to read Matlab files. This module works with both the old (< 7.3) and the new (>= 7.3) HDF5 based format. The output should be the same for both kinds of files.
+
+## How to use
+```python
+from pymatreader import read_mat
+
+data = read_mat(filename)
+```
+
+`data` is a python `dict` containing all variables of the mat file.
+
+## Documentation
+Documentation can be found here: <http://pymatreader.readthedocs.io/en/latest/>
+
+## Code
+The source code can be found here: <https://gitlab.com/obob/pymatreader>
+
+## License
+This module is developed by Dirk Gütlin & Thomas Hartmann at the Universität Salzburg. You are free to use, copy, modify, distribute it under the terms of the BSD 2 clause license.
