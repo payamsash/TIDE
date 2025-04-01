@@ -112,8 +112,8 @@ def test_preproc(inputpath='.',outputpath='/tmp/data_out/'):
 
 if __name__=='__main__':
     #this code runs in two versions: a test/demo version (alternative 1), and with a larger dataset project_n
-    alternative = 1
-    if alternative==1:
+    config_alternative = 1
+    if config_alternative==1:
         basepath = '/tmp/' 
         #the following test setup is suggested: 
         # copy the folder data_in/ to basepath:: cp -r data_in/ /tmp/
@@ -122,6 +122,6 @@ if __name__=='__main__':
         inputpath = Path(basepath).expanduser()/'data_in'
         outputpath = Path(basepath).expanduser()/'data_out'
         test_preproc(inputpath,outputpath)
-    elif alternative==2:
+    elif config_alternative==2:
         main()
     print('Main execution is done.')
