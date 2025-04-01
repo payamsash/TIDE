@@ -7,7 +7,6 @@ from ast import literal_eval
 from tqdm import tqdm
 import time
 import matplotlib.pyplot as plt
-# import customtkinter as ctk
 
 from mne import set_log_level, Report, concatenate_raws
 from mne_icalabel import label_components
@@ -31,15 +30,14 @@ def preprocessing(
         manual_data_scroll=True,
         run_ica=False,
         manual_ica_removal=False,
-        eog_correct=True,
-        pulse_correct=True,
-        resp_correct=True,
+        ssp_eog=True,
+        ssp_ecg=True,
         create_report=True,
         saving_dir=None,
         verbose="ERROR"
         ):
     
-    """ Preprocessing of the raw eeg recordings from BrainVision device.
+    """ Preprocessing of the raw eeg recordings.
         The process could be fully or semi automatic based on user choice.
 
         Parameters
@@ -242,7 +240,7 @@ def preprocessing(
             eog_indices_fil = [x for x in eog_indices if x <= 10]
         ica.apply(raw, exclude=eog_indices_fil)
     
-    if pulse_correct:
+    if ssp_ecg:
         tqdm.write("Finding and removing ECG related components...\n")
         progress.update(1)
         
@@ -258,7 +256,7 @@ def preprocessing(
         ecg_projs, _ = compute_proj_ecg(raw, n_eeg=2, reject=None)
         raw.add_proj(ecg_projs)
 
-    if eog_correct:
+    if ssp_eog:
         tqdm.write("Finding and removing vertical and horizontal EOG components...\n")
         progress.update(1)
 
@@ -283,9 +281,6 @@ def preprocessing(
                                                 )
         ica.apply(raw, exclude=heog_idxs)
 
-    if resp_correct:
-        raise NotImplementedError
-
     raw.apply_proj()
 
     # creating and saving report
@@ -299,7 +294,7 @@ def preprocessing(
             if len(eog_indices_fil) > 0:
                 report.add_figure(fig=eog_components, title="EOG Components", image_format="PNG")
         
-        if pulse_correct:
+        if ssp_ecg:
             fig_ev_pulse, ax = plt.subplots(1, 1, figsize=(7.5, 3))
             ev_pulse.plot(picks="Pulse", time_unit="ms", titles="", axes=ax)
             ax.set_title("Pulse oximetry")
@@ -314,7 +309,7 @@ def preprocessing(
             for fig, title in zip([fig_ev_pulse, fig_ecg, fig_proj], ["Pulse Oximetry Response", "ECG", "ECG Projections"]):
                 report.add_figure(fig=fig, title=title, image_format="PNG")
 
-        if eog_correct:
+        if ssp_eog:
             fig_ev_eog, ax = plt.subplots(1, 1, figsize=(7.5, 3))
             ev_eog.plot(picks="PO7", time_unit="ms", titles="", axes=ax)
             ax.set_title("Vertical EOG")

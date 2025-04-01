@@ -64,14 +64,15 @@ if [ ! -d "/home/ubuntu/data/subjects_fs_dir/$subject_id" ]; then
 else
     mkdir /home/ubuntu/data/subjects_mrtrix_dir/$subject_id
     subject_dir="/home/ubuntu/data/subjects_mrtrix_dir/$subject_id"
-    export PATH=/usr/lib/mrtrix3/bin:$PATH
+    subject_fs_dir="/home/ubuntu/data/subjects_fs_dir/$subject_id"
+    export PATH=/home/ubuntu/data/src_codes/ants-2.5.4/bin:$PATH
 
 ## set Paths
 spath="/home/ubuntu/data/subjects_raw/$subject_id"
 raw_dwi="$spath/dMRI/raw_dwi.rec"
-raw_anat="$spath/sMRI/raw_anat.nii"
+raw_anat="$spath/sMRI/raw_anat_T1.nii"
 fs_dir="/usr/local/freesurfer/8.0.0"
-luts_dir="/usr/local/mrtrix3/share/mrtrix3/labelconvert" # should be sent to vm
+luts_dir="/usr/local/mrtrix3/share/mrtrix3/labelconvert"
 
 ## Conversion
 dcm2niix -f raw_dwi -o $subject_dir $raw_dwi
@@ -86,10 +87,6 @@ mrdegibbs dwi_den.mif dwi_den_gibb.mif
 dwifslpreproc dwi_den_gibb.mif dwi_den_preproc.mif -pe_dir ap -rpe_none  # (roger says its okay) (download anf substitute)
 dwibiascorrect ants dwi_den_preproc.mif dwi_den_preproc_unbiased.mif -bias bias.mif # check this if it makes things better or worse
 echo -e "\e[32mPreprocessing is done successfuly!"
-
-
-wget https://github.com/MRtrix3/mrtrix3/blob/master/bin/dwifslpreproc
-
 
 ### Constrained Spherical Deconvolution
 dwi2mask dwi_den_preproc.mif mask.mif
@@ -123,7 +120,7 @@ tckgen -act 5tt_coreg.mif -backtrack -seed_gmwmi gmwmSeed_coreg.mif \
                                                     tracks_10M.tck
 
 tckedit tracks_10M.tck -number 200k smallerTracks_200k.tck
-tcksift2 -act 5tt_coreg.mif -out_mu sift_mu.txt -out_coeffs sift_coeffs.txt
+tcksift2 -act 5tt_coreg.mif -out_mu sift_mu.txt -out_coeffs sift_coeffs.txt \
                                                     tracks_10M.tck \
                                                     wmfod_norm.mif \
                                                     sift_1M.txt
@@ -131,18 +128,19 @@ tcksift2 -act 5tt_coreg.mif -out_mu sift_mu.txt -out_coeffs sift_coeffs.txt
 ## Create a Connectome for Different Atlases (add schaefer, and histological one)
 
 # aparc atlases (84 & 164)
-labelconvert $fs_dir/subjects/$subject_id/mri/aparc+aseg.mgz \ 
-                                                    $fs_dir/FreeSurferColorLUT.txt \
-                                                    $luts_dir/fs_default.txt \
-                                                    aparc_parcels.mif
-labelconvert $fs_dir/subjects/$subject_id/mri/aparc.a2009s+aseg.mgz \ 
-                                                    $fs_dir/FreeSurferColorLUT.txt \
-                                                    $luts_dir/fs_a2009s.txt \
-                                                    aparc2009s_parcels.mif
+labelconvert $subject_fs_dir/mri/aparc+aseg.mgz \
+                $fs_dir/FreeSurferColorLUT.txt \
+                $luts_dir/fs_default.txt \
+                aparc_parcels.mif
+labelconvert $subject_fs_dir/mri/aparc.a2009s+aseg.mgz \
+                $fs_dir/FreeSurferColorLUT.txt \
+                $luts_dir/fs_a2009s.txt \
+                aparc2009s_parcels.mif
+
 # schaefer atlases (looks like we dont need a labelconvert for schaefer atlas see ->)
 # https://community.mrtrix.org/t/whole-brain-connectome-using-schaefer-parcellation/5301/2
 
-
+## lets see this one later :
 tck2connectome -symmetric -zero_diagonal -scale_invnodevol -tck_weights_in sift_1M.txt tracks_10M.tck 0002_parcels_aparc.mif connectome.csv -out_assignment assignments.txt
 label2mesh 0002_parcels_aparc.mif parcel_mesh.obj # add also for other atlas
 meshfilter parcel_mesh.obj smooth parcel_mesh_smoothed.obj
