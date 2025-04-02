@@ -126,16 +126,19 @@ echo -e "\e[32mSchaefer2018 parcellation in individual surface space!"
 echo -e "\e[33mwill take around 3 minutes ..."
 mkdir $SUBJECTS_DIR/$subject_id/schaefer
 hemis=("lh" "rh")
-for hemi in "${hemis[@]}"; do
-	for n in 100 200 300 400; do
-		for net_option in 7 17; do
+
+for n in 100 200 300 400; do
+	for net_option in 7 17; do
+        for hemi in "${hemis[@]}"; do
 			mris_ca_label -l $SUBJECTS_DIR/$subject_id/label/${hemi}.cortex.label \
                             $subject_id \
                             ${hemi} \
                             $SUBJECTS_DIR/$subject_id/surf/${hemi}.sphere.reg \
                             $sch_gcs_dir/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks.gcs \
-                            $SUBJECTS_DIR/$subject_id/schaefer/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks_order.annot
+                            $SUBJECTS_DIR/$subject_id/label/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks_order.annot
 		done
+        mri_aparc2aseg --s $subject_id --o $SUBJECTS_DIR/$subject_id/schaefer/${n}Parcels_${net_option}Networks.mgz \
+                            --annot Schaefer2018_${n}Parcels_${net_option}Networks_order
 	done
 done
 
@@ -255,6 +258,12 @@ for hemi in "${hemispheres[@]}"; do
 	asegstats2table --subjects $SUB_ID --statsfile=amygdalar-nuclei.lh.T2.v22.T2.stats --tablefile=tables/amygdalar_lh.txt 
 done
 
+# extract Schaefer atlas information
+for hemi in "${hemis[@]}"; do
+    mris_anatomical_stats  -f $SUBJECTS_DIR/$subject_id/stats/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks.stats \
+                            -b -a $SUBJECTS_DIR/$subject_id/label/${hemi}.Schaefer2018_${n}Parcels_${net_option}Networks_order.annot \
+                            $subject_id ${hemi}
+done
 
 end_time=$(date +%s)
 elapsed_time=$((end_time - start_time))

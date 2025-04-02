@@ -89,8 +89,10 @@ dwibiascorrect ants dwi_den_preproc.mif dwi_den_preproc_unbiased.mif -bias bias.
 echo -e "\e[32mPreprocessing is done successfuly!"
 
 ### Constrained Spherical Deconvolution
+## lets see how dwi2mask works, if bad: 1. I'll compute the mask from raw_anat then register it to the diffusion space
+## lets see how dwi2mask works, if bad: 2. I'll provide the template image and corresponding mask from T2 data.
 dwi2mask dwi_den_preproc.mif mask.mif
-dwi2response tournier dwi_den_preproc_unbiased.mif wm_response.txt -voxels voxels.mif
+dwi2response dhollander dwi_den_preproc_unbiased.mif wm_response.txt -voxels voxels.mif
 dwi2fod csd dwi_den_preproc_unbiased.mif -mask mask.mif wm_response.txt wmfod.mif
 mtnormalise wmfod.mif wmfod_norm.mif -mask mask.mif
 echo -e "\e[32mCSD is done successfuly!"
@@ -137,15 +139,19 @@ labelconvert $subject_fs_dir/mri/aparc.a2009s+aseg.mgz \
                 $luts_dir/fs_a2009s.txt \
                 aparc2009s_parcels.mif
 
-# schaefer atlases (looks like we dont need a labelconvert for schaefer atlas see ->)
-# https://community.mrtrix.org/t/whole-brain-connectome-using-schaefer-parcellation/5301/2
 
-## lets see this one later :
-tck2connectome -symmetric -zero_diagonal -scale_invnodevol -tck_weights_in sift_1M.txt tracks_10M.tck 0002_parcels_aparc.mif connectome.csv -out_assignment assignments.txt
-label2mesh 0002_parcels_aparc.mif parcel_mesh.obj # add also for other atlas
-meshfilter parcel_mesh.obj smooth parcel_mesh_smoothed.obj
-connectome2tck tracks_10M.tck assignments.txt edge_exemplar.tck -files single -exemplars 0002_parcels_aparc.mif
+mrconvert $subject_fs_dir/schaefer/100Parcels_7Networks.mgz 100Parcels_7Networks.mif # okay fixed
 
+tck2connectome -symmetric -zero_diagonal -scale_invnodevol -tck_weights_in \
+                sift_1M.txt tracks_10M.tck aparc_parcels.mif connectome.csv \
+                -out_assignment aparc_parcels_assignments.txt
+label2mesh aparc_parcels.mif aparc_parcels_mesh.obj
+meshfilter aparc_parcels_mesh.obj smooth aparc_parcels_mesh_smoothed.obj
+connectome2tck tracks_10M.tck aparc_parcels_assignments.txt aparc_parcels_edge_exemplar.tck \
+                -files single -exemplars aparc_parcels.mif
+
+
+mrtrix_cleanup $subject_dir
 ### TBSS
 
 
