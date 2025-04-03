@@ -127,7 +127,7 @@ tcksift2 -act 5tt_coreg.mif -out_mu sift_mu.txt -out_coeffs sift_coeffs.txt \
                                                     wmfod_norm.mif \
                                                     sift_1M.txt
 
-## Create a Connectome for Different Atlases (add schaefer, and histological one)
+## Create a Connectome for Different Atlases
 
 # aparc atlases (84 & 164)
 labelconvert $subject_fs_dir/mri/aparc+aseg.mgz \
@@ -139,20 +139,45 @@ labelconvert $subject_fs_dir/mri/aparc.a2009s+aseg.mgz \
                 $luts_dir/fs_a2009s.txt \
                 aparc2009s_parcels.mif
 
+parcels=("aparc" "aparc.a2009s" "schaefer")
+for parc in "${parcels[@]}"; do
+    if [[ $parc == "aparc" || $parc == "aparc.a2009s"]]; then
+        labelconvert $subject_fs_dir/mri/${parc}+aseg.mgz \
+                $fs_dir/FreeSurferColorLUT.txt \
+                $luts_dir/fs_default.txt \
+                ${parc}_parcels.mif
+        
+        tck2connectome -symmetric -zero_diagonal -scale_invnodevol -tck_weights_in \
+                    sift_1M.txt tracks_10M.tck ${parc}_parcels.mif ${parc}_parcels_connectome.csv \
+                    -out_assignment ${parc}_parcels_assignments.txt
+        label2mesh ${parc}_parcels.mif ${parc}_parcels_mesh.obj
+        meshfilter ${parc}_parcels_mesh.obj smooth ${parc}_parcels_mesh_smoothed.obj
+        connectome2tck tracks_10M.tck ${parc}_parcels_assignments.txt ${parc}_parcels_edge_exemplar.tck \
+                        -files single -exemplars ${parc}_parcels.mif
+    fi
 
-mrconvert $subject_fs_dir/schaefer/100Parcels_7Networks.mgz 100Parcels_7Networks.mif # okay fixed
+    if [[ $parc == "schaefer" ]]; then
+        for n in 100 200 300 400; do
+            for net_option in 7 17; do
+                mrconvert $subject_fs_dir/schaefer/${n}Parcels_${net_option}Networks.mgz sch_${n}Parcels_${net_option}Networks.mif
 
-tck2connectome -symmetric -zero_diagonal -scale_invnodevol -tck_weights_in \
-                sift_1M.txt tracks_10M.tck aparc_parcels.mif connectome.csv \
-                -out_assignment aparc_parcels_assignments.txt
-label2mesh aparc_parcels.mif aparc_parcels_mesh.obj
-meshfilter aparc_parcels_mesh.obj smooth aparc_parcels_mesh_smoothed.obj
-connectome2tck tracks_10M.tck aparc_parcels_assignments.txt aparc_parcels_edge_exemplar.tck \
-                -files single -exemplars aparc_parcels.mif
-
+                tck2connectome -symmetric -zero_diagonal -scale_invnodevol -tck_weights_in \
+                                    sift_1M.txt tracks_10M.tck sch_${n}Parcels_${net_option}Networks.mif \
+                                    sch_${n}Parcels_${net_option}Networks_connectome.csv \
+                                    -out_assignment sch_${n}Parcels_${net_option}Networks_assignments.txt
+                label2mesh sch_${n}Parcels_${net_option}Networks.mif sch_${n}Parcels_${net_option}Networks_mesh.obj
+                meshfilter sch_${n}Parcels_${net_option}Networks_mesh.obj smooth sch_${n}Parcels_${net_option}Networks_mesh_smoothed.obj
+                connectome2tck tracks_10M.tck sch_${n}Parcels_${net_option}Networks_assignments.txt \
+                                sch_${n}Parcels_${net_option}Networks_edge_exemplar.tck -files single \
+                                -exemplars sch_${n}Parcels_${net_option}Networks.mif
+            done
+        done
+    fi
+done
 
 mrtrix_cleanup $subject_dir
+
 ### TBSS
 
 
-### Connectome
+
