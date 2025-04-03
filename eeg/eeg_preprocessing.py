@@ -152,20 +152,14 @@ def preprocessing(
         case "Zuerich": 
             fname = fname_paradigm / f"{subject_id}_{paradigm}.vhdr"
             if not fname.exists():
-                fname = fname_paradigm / f"{subject_id}.vhdr"
-                if not fname.exists():
-                    raise ValueError(f"Subject {subject_id}_{paradigm}.vhdr not found in the EEG directory!")
+                raise ValueError(f"Subject {subject_id}_{paradigm}.vhdr not found in the EEG directory!")
             
             captrak_dir = subjects_dir / subject_id / "EEG" / "captrack"
-            montage_found=False
-            for file_ck in os.listdir(captrak_dir):
-                if file_ck.endswith(".bvct"): 
+            try:
+                for file_ck in os.listdir(captrak_dir):
+                    if file_ck.endswith(".bvct"): 
                         montage = read_dig_captrak(file_ck)
-                        montage_found = True
-                elif file_ck.endswith(".loc"): 
-                    montage = read_custom_montage(file_ck)
-                    montage_found = True
-            if not montage_found:
+            except:
                 montage = make_standard_montage("easycap-M1")
 
             ch_types = {"O1": "eog",
@@ -178,11 +172,7 @@ def preprocessing(
                         }
             
             raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
-            try:
-                raw.set_channel_types(ch_types)
-            except ValueError as err:
-                del ch_types['Pulse']
-                raw.set_channel_types(ch_types)
+            raw.set_channel_types(ch_types)
             raw.pick(["eeg", "eog", "ecg", "stim"])
     
     raw.load_data()
