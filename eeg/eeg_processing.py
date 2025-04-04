@@ -117,7 +117,10 @@ def run_rs_analysis(
     if subjects_fs_dir == None:
         subjects_fs_dir = "/Applications/freesurfer/7.4.1/subjects"
 
-    paradigm = f"rest_v{visit}"
+    if visit:
+        paradigm = f"rest_v{visit}"
+    else:
+        paradigm = f"rest"
     fname = subjects_dir / subject_id / "EEG" / paradigm / "raw_prep.fif"
     raw = read_raw_fif(fname, preload=True)
     info = raw.info
