@@ -118,9 +118,9 @@ def preprocessing(
 
     match site:
         case "Austin":
-            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".edf")]
+            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".mff")]
             raw = concatenate_raws(raws)
-            raw.rename_channels(mapping=lambda s: s[:1] + s[4:])
+            raw.drop_channels(ch_names="VREF")
             montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
         case "Dublin":
@@ -132,8 +132,9 @@ def preprocessing(
         case "Ghent":
             raise NotImplementedError
 
-        case "Illinois": # curry ** last thing to check **
-            raise NotImplementedError
+        case "Illinois":
+            [os.rename(fname, f"{fname[:-3]}.dpa") for fname in fnames if fname.endswith(".dpo")]
+            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".cdt")]
             
         case "Regensburg":
             raws = []

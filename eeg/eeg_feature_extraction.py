@@ -15,14 +15,12 @@ from mne import (set_log_level,
                     read_epochs,
                     concatenate_epochs)
 
-
 def extract_eeg_features(
         subject_id,
         subjects_dir=None,
         features=["pow_freq_bands", "spect_entropy"],
         paradigm="rest_v1",
         atlas="aparc",
-        mri=False,
         saving_dir=None,
         verbose="ERROR"
         ):
@@ -46,8 +44,6 @@ def extract_eeg_features(
     atlases = ["aparc", "aparc.a2009s"]
     if atlas not in atlases:
         raise ValueError(f"atlas should be one of {atlases}")
-    
-    assert isinstance(mri, bool), "mri must be boolean."
 
     if subjects_dir == None:
         subjects_dir = Path.cwd().parent / "subjects"
@@ -170,3 +166,12 @@ def extract_eeg_features(
     if saving_dir is None:
         saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}" / "features.csv"
     df.to_csv(saving_dir)
+
+
+def get_full_features_list():
+    full_list = ["pow_freq_bands", "spect_slope", "hjorth_complexity_spect",
+                "hjorth_mobility_spect", "hurst_exp", "app_entropy",
+                "samp_entropy", "decorr_time", "hjorth_mobility",
+                "hjorth_complexity", "higuchi_fd", "katz_fd",
+                "spect_entropy", "svd_entropy", "svd_fisher_info"]
+    print('\n'.join(full_list))
