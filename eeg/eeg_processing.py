@@ -445,9 +445,9 @@ def run_erp_analysis(
 
             case "regularity" | "teas":
                 raise NotImplementedError
-            case _:
-                raise NotImplementedError
-                
+        
+        if paradigm.startswith('rest'):
+            baseline=None
     
     tqdm.write("Creating epochs...\n")
     progress.update(1)
