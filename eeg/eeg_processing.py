@@ -118,7 +118,10 @@ def run_rs_analysis(
     if subjects_fs_dir == None:
         subjects_fs_dir = "/Applications/freesurfer/7.4.1/subjects"
 
-    paradigm = f"rest_v{visit}"
+    if visit=='':
+        paradigm = f"rest"
+    else:
+        paradigm = f"rest_v{visit}"
     fname = subjects_dir / subject_id / "EEG" / paradigm / "raw_prep.fif"
     raw = read_raw_fif(fname, preload=True)
     info = raw.info
@@ -433,6 +436,9 @@ def run_erp_analysis(
 
             case "regularity" | "teas":
                 raise NotImplementedError
+        
+        if paradigm.startswith('rest'):
+            baseline=None
     
     tqdm.write("Creating epochs...\n")
     progress.update(1)
