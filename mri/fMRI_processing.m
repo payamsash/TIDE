@@ -1,62 +1,60 @@
-% Sample CONN Script for the OSU Workshop
-% Created by Andrew Jahn, University of Michigan, 02.27.2020
-% Adapted from Alfonso Nieto-Castanon's script, www.alfnie.com 
+% T2 functional MRI Analysis Pipeline
+% Written by Payam S. Shabestari, Zurich, 01.2025
+% email: payam.sadeghishabestari@uzh.ch
+% This script is written mainly for Antinomics project. However It could be used for other purposes.
 
-% FIND functional/structural files
-% note: this will look for all data in these folders, irrespestive of the specific download subsets entered as command-line arguments
-NSUBJECTS=6;
-cwd=pwd;
-FUNCTIONAL_FILE=cellstr(conn_dir('sub-*_func_sub-*_task-rest_bold.nii.gz'));
-STRUCTURAL_FILE=cellstr(conn_dir('sub-*_anat_sub-*_T1w.nii'));
-if rem(length(FUNCTIONAL_FILE),NSUBJECTS),error('mismatch number of functional files %n', length(FUNCTIONAL_FILE));end
-if rem(length(STRUCTURAL_FILE),NSUBJECTS),error('mismatch number of anatomical files %n', length(FUNCTIONAL_FILE));end
-nsessions=length(FUNCTIONAL_FILE)/NSUBJECTS;
-FUNCTIONAL_FILE=reshape(FUNCTIONAL_FILE,[nsessions, NSUBJECTS]);
-STRUCTURAL_FILE={STRUCTURAL_FILE{1:NSUBJECTS}};
-disp([num2str(size(FUNCTIONAL_FILE,1)),' sessions']);
-disp([num2str(size(FUNCTIONAL_FILE,2)),' subjects']);
-TR=3.56; % Repetition time
+% load functional/structural files
+subject_id = 'dvob';
+n_subjects = 1;
+n_sessions = 2;
+TR = 2.5;
+subjects_conn_dir = '/home/ubuntu/data/subjects_conn_dir';
+subject_dir = fullfile('/home/ubuntu/data/subjects_raw', subject_id);
 
+func_files = cellstr(sort(conn_dir(fullfile(subject_dir, 'fMRI', 'raw_func_s*.nii'))));
+struc_file = cellstr(conn_dir(fullfile(subject_dir, 'sMRI', 'raw_anat_T1.nii')));
 
-% CONN-SPECIFIC SECTION: RUNS PREPROCESSING/SETUP/DENOISING/ANALYSIS STEPS
-% Prepares batch structure
-clear batch;
-batch.filename=fullfile(cwd,'Arithmetic_Scripted.mat');            % New conn_*.mat experiment name
-
-% SETUP & PREPROCESSING step (using default values for most parameters, see help conn_batch to define non-default values)
-% CONN Setup                                            % Default options (uses all ROIs in conn/rois/ directory); see conn_batch for additional options 
-% CONN Setup.preprocessing                               (realignment/coregistration/segmentation/normalization/smoothing)
-batch.Setup.isnew=1;
-batch.Setup.nsubjects=NSUBJECTS;
-batch.Setup.RT=TR;                                        % TR (seconds)
-batch.Setup.functionals=repmat({{}},[NSUBJECTS,1]);       % Point to functional volumes for each subject/session
-for nsub=1:NSUBJECTS,for nses=1:nsessions,batch.Setup.functionals{nsub}{nses}{1}=FUNCTIONAL_FILE{nses,nsub}; end; end %note: each subject's data is defined by three sessions and one single (4d) file per session
-batch.Setup.structurals=STRUCTURAL_FILE;                  % Point to anatomical volumes for each subject
-nconditions=nsessions;                                  % treats each session as a different condition (comment the following three lines and lines 84-86 below if you do not wish to analyze between-session differences)
-if nconditions==1
-    batch.Setup.conditions.names={'rest'};
-    for ncond=1,for nsub=1:NSUBJECTS,for nses=1:nsessions,              batch.Setup.conditions.onsets{ncond}{nsub}{nses}=0; batch.Setup.conditions.durations{ncond}{nsub}{nses}=inf;end;end;end     % rest condition (all sessions)
-else
-    batch.Setup.conditions.names=[{'rest'}, arrayfun(@(n)sprintf('Session%d',n),1:nconditions,'uni',0)];
-    for ncond=1,for nsub=1:NSUBJECTS,for nses=1:nsessions,              batch.Setup.conditions.onsets{ncond}{nsub}{nses}=0; batch.Setup.conditions.durations{ncond}{nsub}{nses}=inf;end;end;end     % rest condition (all sessions)
-    for ncond=1:nconditions,for nsub=1:NSUBJECTS,for nses=1:nsessions,  batch.Setup.conditions.onsets{1+ncond}{nsub}{nses}=[];batch.Setup.conditions.durations{1+ncond}{nsub}{nses}=[]; end;end;end
-    for ncond=1:nconditions,for nsub=1:NSUBJECTS,for nses=ncond,        batch.Setup.conditions.onsets{1+ncond}{nsub}{nses}=0; batch.Setup.conditions.durations{1+ncond}{nsub}{nses}=inf;end;end;end % session-specific conditions
+if length(func_files) ~= 2
+    error('Mismatch for subject %s: number of functional files should be 2, but found %d', subject_id, length(func_files));
 end
-batch.Setup.preprocessing.steps='default_mni';
-batch.Setup.preprocessing.sliceorder='interleaved (Siemens)';
-batch.Setup.done=1;
-batch.Setup.overwrite='Yes';
 
-%Uncomment the following 2 lines if you want to use Andy's custom atlas
+if length(struc_file) ~= 1
+    error('Mismatch for subject %s: number of structural files should be 1, but found %d', subject_id, length(struc_file));
+end
+
+func_files = reshape(func_files,[n_sessions, n_subjects]);
+struc_file = {struc_file{1:n_subjects}};
+
+% run setup and preprocessing
+
+clear batch;
+batch.filename = fullfile(subjects_conn_dir, [subject_id, '.mat']);            
+batch.Setup.isnew = 1;
+batch.Setup.n_subjects = n_subjects;
+batch.Setup.RT = TR;
+batch.Setup.functionals = repmat({{}}, [n_subjects,1]);
+
+for nsub = 1:n_subjects
+    for nses = 1:n_sessions
+        batch.Setup.functionals{nsub}{nses}{1} = func_files{nses, nsub}; 
+    end
+end
+
+batch.Setup.structurals = struc_file;                  
+n_conditions=n_sessions;
+batch.Setup.conditions.names={'rest', 'rest'};
+batch.Setup.preprocessing.steps = 'default_mni';
+batch.Setup.preprocessing.sliceorder = 'interleaved (Philips)';
+batch.Setup.done = 1;
+batch.Setup.overwrite = 'Yes';
+
+% volumetric analysis
+% Schaefer atlas
 %batch.Setup.rois.files{1}='ROIs/AndyROIs.nii';
 %batch.Setup.rois.multiplelabels = 1;
 
-% uncomment the following 3 lines if you prefer to run one step at a time:
-% conn_batch(batch); % runs Preprocessing and Setup steps only
-% clear batch;
-% batch.filename=fullfile(cwd,'Arithmetic_Scripted.mat');            % Existing conn_*.mat experiment name
 
-% DENOISING step
+% denoising
 % CONN Denoising                                    % Default options (uses White Matter+CSF+realignment+scrubbing+conditions as confound regressors); see conn_batch for additional options 
 batch.Denoising.filter=[0.01, 0.1];                 % frequency filter (band-pass values, in Hz)
 batch.Denoising.done=1;
@@ -75,9 +73,5 @@ batch.Analysis.overwrite='Yes';
 % Run all analyses
 conn_batch(batch);
 
-% CONN Display
-% launches conn gui to explore results
-conn
-conn('load',fullfile(cwd,'Arithmetic_Scripted.mat'));
-conn gui_results
+
 

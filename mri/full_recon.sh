@@ -36,7 +36,6 @@ for subj in "${subjects[@]}"; do
     echo "Running recon-all for $subj"
 
     export FS_V8_XOPTS=0 && recon-all -s $subj -all
-
     if [ $? -eq 0 ]; then
         echo "Recon-all for $subj completed successfully."
     else
