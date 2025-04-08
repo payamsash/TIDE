@@ -43,7 +43,8 @@ def run_rs_analysis(
         automatic_epoch_rejection=False,
         create_report=True,
         saving_dir=None,
-        verbose="ERROR"
+        verbose="ERROR",
+        overwrite=False
         ):
     
     """ Sensor and source space analysis of the preprocessed resting-state eeg recordings from BrainVision device.
@@ -199,9 +200,9 @@ def run_rs_analysis(
         if automatic_epoch_rejection == "pyriemann":
             raise NotImplementedError
 
-    epochs_eo.save(fname=saving_dir / f"epochs-eo-epo.fif", overwrite=True)
+    epochs_eo.save(fname=saving_dir / f"epochs-eo-epo.fif", overwrite=overwrite)
     if both_conditions:
-        epochs_ec.save(fname=saving_dir / f"epochs-ec-epo.fif", overwrite=True)
+        epochs_ec.save(fname=saving_dir / f"epochs-ec-epo.fif", overwrite=overwrite)
             
     if source_analysis:
         if mri:
@@ -260,7 +261,7 @@ def run_rs_analysis(
                                                 )
         
         write_inverse_operator(fname=saving_dir / "operator-inv.fif",
-                                inv=inverse_operator)
+                                inv=inverse_operator,overwrite=overwrite)
 
     ## create a report
     if create_report:
