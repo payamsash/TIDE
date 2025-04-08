@@ -107,7 +107,7 @@ def run_rs_analysis(
                     )
     
     time.sleep(1)
-    tqdm.write("Loading preprocessed EEG data ...\n")
+    progress.set_description("Loading preprocessed EEG data ...\n")
     progress.update(1)
 
     if subjects_dir == None:
@@ -126,7 +126,7 @@ def run_rs_analysis(
     raw = read_raw_fif(fname, preload=True)
     info = raw.info
     
-    tqdm.write("Creating epochs...\n")
+    progress.set_description("Creating epochs...\n")
     progress.update(1)
 
     ## be cautious
@@ -213,16 +213,16 @@ def run_rs_analysis(
                     "subjects_dir": subjects_fs_dir
                     }
             
-            tqdm.write("Setting up bilateral hemisphere surface-based source space with subsampling ...\n")
+            progress.set_description("Setting up bilateral hemisphere surface-based source space with subsampling ...")
             progress.update(1)
             src = setup_source_space(**kwargs)
 
-            tqdm.write("Creating a BEM model for subject ...\n")
+            progress.set_description("Creating a BEM model for subject ...\n")
             progress.update(1)
             bem_model = make_bem_model(**kwargs)  
             bem = make_bem_solution(bem_model)
 
-            tqdm.write("Coregistering MRI with a subjects head shape ...\n")
+            progress.set_description("Coregistering MRI with a subjects head shape ...\n")
             progress.update(1)
             coreg = Coregistration(info, subject_id, subjects_fs_dir, fiducials='auto')
             coreg.fit_fiducials()
@@ -235,14 +235,14 @@ def run_rs_analysis(
             kwargs = {"subject": "fsaverage",
                     "subjects_dir": None
                     }
-            tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
+            progress.set_description("Loading MRI information of Freesurfer template subject ...\n")
             progress.update(1)
             fs_dir = fetch_fsaverage()
             trans = fs_dir / "bem" / "fsaverage-trans.fif"
             src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
             bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
 
-        tqdm.write("Computing forward solution ...\n")
+        progress.set_description("Computing forward solution ...\n")
         progress.update(1)
         fwd = make_forward_solution(info,
                                     trans=trans,
@@ -251,12 +251,12 @@ def run_rs_analysis(
                                     meg=False,
                                     eeg=True
                                     )
-        tqdm.write("Using ad hoc noise covariance for the recording ...\n")
+        progress.set_description("Using ad hoc noise covariance for the recording ...\n")
         progress.update(1)
         noise_cov = make_ad_hoc_cov(info)
 
         ## add a condition for GPIAS to use ad hoc noise covariance
-        tqdm.write("Computing the minimum-norm inverse solution ...\n")
+        progress.set_description("Computing the minimum-norm inverse solution ...\n")
         progress.update(1)
         inverse_operator = make_inverse_operator(info,
                                                 fwd,
@@ -268,7 +268,7 @@ def run_rs_analysis(
 
     ## create a report
     if create_report:
-        tqdm.write("Creating report...\n")
+        progress.set_description("Creating report...")
         progress.update(1)
         fname_report = subjects_dir / subject_id / "EEG" / "reports" / f"{paradigm}.h5"
         report = open_report(fname_report)
@@ -293,10 +293,11 @@ def run_rs_analysis(
                             )
         ## saving
         report.save(fname=f"{fname_report.as_posix()[:-3]}.html", open_browser=False, overwrite=True)
+        print(f'Report written to {fname_report.as_posix()[:-3]}.html')
     
-    tqdm.write("\033[32mAnalysis finished successfully!\n")
+    progress.set_description("\033[32mAnalysis finished successfully!\n")
     progress.update(1)
-    progress.close()
+    #progress.close()
 
 
 
@@ -376,7 +377,7 @@ def run_erp_analysis(
     
     ## reading files and montaging 
     time.sleep(1)
-    tqdm.write("Loading preprocessed EEG data ...\n")
+    progress.set_description("Loading preprocessed EEG data ...")
     progress.update(1)
 
     if subjects_dir == None:
@@ -440,7 +441,7 @@ def run_erp_analysis(
         if paradigm.startswith('rest'):
             baseline=None
     
-    tqdm.write("Creating epochs...\n")
+    progress.set_description("Creating epochs...")
     progress.update(1)
     epochs = Epochs(raw=raw,
                     events=events,
@@ -457,7 +458,7 @@ def run_erp_analysis(
         epochs.plot(n_channels=80, picks="eeg", events=events, scalings=dict(eeg=50e-6), block=True)
 
     ## save epochs
-    tqdm.write("Computing Evoked objects and saving it...\n")
+    progress.set_description("Computing Evoked objects and saving it...")
     progress.update(1)
 
     if saving_dir == None:
@@ -493,16 +494,16 @@ def run_erp_analysis(
             kwargs = {"subject": subject_id,
                     "subjects_dir": subjects_fs_dir
                     }
-            tqdm.write("Setting up bilateral hemisphere surface-based source space with subsampling ...\n")
+            progress.set_description("Setting up bilateral hemisphere surface-based source space with subsampling ...")
             progress.update(1)
             src = setup_source_space(**kwargs)
 
-            tqdm.write("Creating a BEM model for subject ...\n")
+            progress.set_description("Creating a BEM model for subject ...")
             progress.update(1)
             bem_model = make_bem_model(**kwargs)  
             bem = make_bem_solution(bem_model)
 
-            tqdm.write("Coregistering MRI with a subjects head shape ...\n")
+            progress.set_description("Coregistering MRI with a subjects head shape ...")
             progress.update(1)
             coreg = Coregistration(info, subject_id, subjects_fs_dir, fiducials='auto')
             coreg.fit_fiducials()
@@ -512,7 +513,7 @@ def run_erp_analysis(
             trans = coreg.trans
 
         else:    
-            tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
+            progress.set_description("Loading MRI information of Freesurfer template subject ...")
             progress.update(1)
             kwargs = {"subject": "fsaverage",
                     "subjects_dir": None,
@@ -522,7 +523,7 @@ def run_erp_analysis(
             src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
             bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
 
-        tqdm.write("Computing forward solution ...\n")
+        progress.set_description("Computing forward solution ...")
         progress.update(1)
         fwd = make_forward_solution(info,
                                     trans=trans,
@@ -532,7 +533,7 @@ def run_erp_analysis(
                                     eeg=True
                                     )
 
-        tqdm.write("Estimating the noise covariance of the recording ...\n")
+        progress.set_description("Estimating the noise covariance of the recording ...")
         progress.update(1)
         if paradigm == "gpias":
             po_stims = [key for key in event_ids.keys() if key.startswith("PO")]
@@ -540,7 +541,7 @@ def run_erp_analysis(
         else:
             noise_cov = compute_covariance(epochs)
 
-        tqdm.write("Computing the minimum-norm inverse solution ...\n")
+        progress.set_description("Computing the minimum-norm inverse solution ...")
         progress.update(1)
         inverse_operator = make_inverse_operator(info,
                                                 fwd,
@@ -550,7 +551,7 @@ def run_erp_analysis(
                                 inv=inverse_operator)
         ## create a report
         if create_report:
-            tqdm.write("Creating report...\n")
+            progress.set_description("Creating report...")
             progress.update(1)
             fname_report = subjects_dir / subject_id / "EEG" / "reports" / f"{paradigm}.h5"
             report = open_report(fname_report)
@@ -580,7 +581,7 @@ def run_erp_analysis(
             ## saving
             report.save(fname=f"{fname_report.as_posix()[:-3]}.html", open_browser=False, overwrite=True)
 
-    tqdm.write("\033[32mAnalysis finished successfully!\n")
+    progress.set_description("\033[32mAnalysis finished successfully!")
     progress.update(1)
     progress.close()
 
