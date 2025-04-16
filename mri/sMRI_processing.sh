@@ -209,15 +209,11 @@ mne watershed_bem -s $subject_id -d $SUBJECTS_DIR
 
 
 ## add some swap space (very RAM hungry code...) (lets see what happens with 12G)
-sudo fallocate -l 32G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
 echo -e "\e[32mBayesian Segmentation with Histological Atlas "NextBrain""
 mkdir $SUBJECTS_DIR/$subject_id/hist
 mri_histo_atlas_segment_fireants $SUBJECTS_DIR/$subject_id/mri/T1.mgz \
                                     $SUBJECTS_DIR/$subject_id/hist \
-                                    0 1
+                                    0 10
                                     
 ## maybe reset the swap here
 
