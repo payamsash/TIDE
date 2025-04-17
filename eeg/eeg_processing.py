@@ -33,7 +33,6 @@ from mne import (set_log_level,
 def run_rs_analysis(
         subject_id,
         subjects_dir=None,
-        visit=1,
         event_ids=None,
         source_analysis=True,
         precomute_inv=False,
@@ -68,8 +67,6 @@ def run_rs_analysis(
                 ├── paradigm_1/
                 ├── paradigm_2/
                 ├── ...
-        visit : int
-            The visit number of the resting state paradigm. 
         event_ids: dict | None
             If dict, the keys should be the eyes_close and eyes_open (respectively) and the values should be integar.
             If None, the first event (not new segment) will be assumed to be eyes closed trigger.

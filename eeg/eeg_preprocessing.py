@@ -63,6 +63,8 @@ def preprocessing(
         paradigm : str
             Name of the EEG paradigm. should be a subfolder in the subjects_dir / subject_id containing
             raw EEG data.
+        psd_check : bool
+            if True, the psd will be shown, by clicking on noisy channels, you can see the bad channel names.
         manual_data_scroll : bool
             If True, user can interactively annotate segments of the recording to be removed.
             If not, this step will be skipped.
@@ -72,10 +74,10 @@ def preprocessing(
         manual_ica_removal : bool
             If True, a window will pop up asking ICA components to be removed.
             If not, a machine learning model will be used to remove ICA components related to eye movements.
-        respiratory_correct : bool
-            Not Implemented yet ...
-        pulse_correct : bool
-            Not Implemented yet ...
+        ssp_eog : bool
+            If True, will use EOG channels to regress out blinking from data.
+        ssp_ecg : bool
+            If True, will use ECG channels to regress out ECG artifact from data.
         create_report : bool
             If True, a report will be created per recordinng.
         saving_dir : path-like | None | bool
@@ -185,7 +187,7 @@ def preprocessing(
     progress.update(1)
     raw.resample(sfreq=250, stim_picks=None)
 
-    if paradigm.startswith("rest"):
+    if paradigm == "rest":
         l_freq, h_freq = 0.1, 100
         if site in ["Illinois", "Austin"]:
             line_freq = 60
