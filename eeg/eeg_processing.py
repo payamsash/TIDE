@@ -35,7 +35,6 @@ def run_rs_analysis(
         subjects_dir=None,
         event_ids=None,
         source_analysis=True,
-        precomute_inv=False,
         mri=False,
         subjects_fs_dir=None,
         manual_data_scroll=False,
