@@ -1,0 +1,62 @@
+Zuerich:
+  psd_check: true
+  manual_data_scroll: true
+  run_ica: false
+  manual_ica_removal: false
+  ssp_eog: true
+  ssp_ecg: true
+  create_report: true
+
+Austin:
+  psd_check: true
+  manual_data_scroll: true
+  run_ica: true
+  manual_ica_removal: false
+  ssp_eog: false
+  ssp_ecg: false
+  create_report: true
+
+Dublin:
+  psd_check: true
+  manual_data_scroll: true
+  run_ica: true
+  manual_ica_removal: false
+  ssp_eog: false
+  ssp_ecg: false
+  create_report: true
+
+Ghent:
+  psd_check: true
+  manual_data_scroll: true
+  run_ica: true
+  manual_ica_removal: false
+  ssp_eog: false
+  ssp_ecg: false
+  create_report: true
+
+Illinois:
+  psd_check: true
+  manual_data_scroll: true
+  run_ica: true
+  manual_ica_removal: false
+  ssp_eog: false
+  ssp_ecg: false
+  create_report: true
+
+Regensburg:
+  psd_check: true
+  manual_data_scroll: true
+  run_ica: true
+  manual_ica_removal: false
+  ssp_eog: false
+  ssp_ecg: false
+  create_report: true
+
+Tuebingen:
+  psd_check: true
+  manual_data_scroll: true
+  run_ica: true
+  manual_ica_removal: false
+  ssp_eog: false
+  ssp_ecg: false
+  create_report: true

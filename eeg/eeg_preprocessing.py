@@ -3,9 +3,9 @@
 
 import os
 from pathlib import Path
-from ast import literal_eval
 from tqdm import tqdm
 import time
+from warnings import warn
 import matplotlib.pyplot as plt
 
 from mne import set_log_level, Report, concatenate_raws
@@ -14,6 +14,12 @@ from mne_icalabel.gui import label_ica_components
 from mne.io import read_raw
 from mne.channels import read_dig_captrak, make_standard_montage
 from mne.viz import plot_projs_joint
+from .tools import (load_config,
+                    initiate_logging,
+                    _check_preprocessing_inputs,
+                    create_subject_dir,
+                    read_vhdr_input_fname
+                    )
 from mne.preprocessing import (ICA,
                                 create_eog_epochs,
                                 create_ecg_epochs,
@@ -21,20 +27,16 @@ from mne.preprocessing import (ICA,
                                 compute_proj_eog
                                 )
 
-def preprocessing(
+def preprocess(
+        fname,
         subject_id,
-        subjects_dir=None,
+        subjects_dir,
         site="Zuerich",
         paradigm="gpias",
-        psd_check=True,
-        manual_data_scroll=True,
-        run_ica=False,
-        manual_ica_removal=False,
-        ssp_eog=True,
-        ssp_ecg=True,
-        create_report=True,
-        saving_dir=None,
-        verbose="ERROR"
+        config_file=None,
+        overwrite="warn",
+        verbose="ERROR",
+        **kwargs
         ):
     
     """ Preprocessing of the raw eeg recordings.
@@ -77,7 +79,7 @@ def preprocessing(
         ssp_eog : bool
             If True, will use EOG channels to regress out blinking from data.
         ssp_ecg : bool
-            If True, will use ECG channels to regress out ECG artifact from data.
+            If True, will use ECG or Pulse channel to regress out ECG artifact from data.
         create_report : bool
             If True, a report will be created per recordinng.
         saving_dir : path-like | None | bool
@@ -92,6 +94,61 @@ def preprocessing(
             used for other purposes.
         """
     
+    ## get values from config file
+    if config_file is None:
+        yaml_file = os.path.join(os.path.dirname(__file__), 'preprocessing-config.yaml')
+        config = load_config(site, yaml_file)
+    else:
+        config = load_config(site, config_file)
+    
+    config.update(kwargs)
+    psd_check = config.get("psd_check", True)
+    manual_data_scroll = config.get("manual_data_scroll", True)
+    run_ica = config.get("run_ica", False)
+    manual_ica_removal = config.get("manual_ica_removal", False)
+    ssp_eog = config.get("ssp_eog", True)
+    ssp_ecg = config.get("ssp_ecg", True)
+    create_report = config.get("create_report", True)
+    verbose = config.get("verbose", "ERROR")
+
+    ## only check inputs
+    _check_preprocessing_inputs(fname,
+                                subject_id,
+                                subjects_dir,
+                                site,
+                                paradigm,
+                                psd_check,
+                                manual_data_scroll,
+                                run_ica,
+                                manual_ica_removal,
+                                ssp_eog,
+                                ssp_ecg,
+                                create_report,
+                                verbose,
+                                overwrite
+                                )
+
+    ## check subject_dir and create if not there
+    subjects_dir = Path(subjects_dir)
+    subject_dir = subjects_dir / subject_id
+
+    created = False
+    if not Path.is_dir(subjects_dir / subject_id):
+        create_subject_dir(subject_id, subjects_dir)
+        created = True
+
+    logging = initiate_logging(
+                                subject_dir / "logs" / f"{paradigm}_preprocessing.log",
+                                config,
+                                type="preprocessing"
+                                )
+
+
+    if created:
+        logging.info("preprocessing script initiated and subject directory has been created.")
+    else:
+        logging.info("preprocessing script initiated. Subject directory was already created.")
+
     set_log_level(verbose=verbose)
     progress = tqdm(total=5,
                     desc="",
@@ -100,106 +157,124 @@ def preprocessing(
                     bar_format='{l_bar}{bar}'
                     )
     
-    ## reading files and montaging 
+    ## finding files
     time.sleep(1)
-    tqdm.write("Loading raw EEG data ...\n")
+    tqdm.write("Finding and reading raw EEG data ...\n")
     progress.update(1)
 
-    if subjects_dir == None:
-        subjects_dir = Path.cwd().parent / "subjects"
+    fname = Path(fname)
+    suffix = fname.suffix
+    fnames = []
+    if fname.stem.endswith(("_1", "-1")):
+        i = 1
+        while True:
+            fname_1 = Path(f"{fname.stem[:-2]}_{i}{suffix}")
+            fname_2 = Path(f"{fname.stem[:-2]}-{i}{suffix}")
+            if not any([fname_1.exists(), fname_2.exists()]):
+                break
+            if fname_1.exists(): fnames.append(fname_1)
+            if fname_2.exists(): fnames.append(fname_2)
+            i += 1
     else:
-        subjects_dir = Path(subjects_dir)
-    
-    sites = ["Austin", "Dublin", "Ghent", "Illinois", "Regensburg", "Tuebingen", "Zuerich"]
-    if site not in sites:
-        raise ValueError(f"site option must be one of {sites}, got {site} instead.")
+        fnames = [fname]
 
-    fname_paradigm = subjects_dir / subject_id / "EEG" / paradigm 
-    fnames = [f for f in sorted(os.listdir(fname_paradigm)) if not f.startswith(".")]
-    assert len(fnames) > 0, f"EEG data not found in this directory: {fname_paradigm}!"
+    logging.info(f"Following EEG files are selected to be read: {[str(p) for p in fnames]}")
 
-    match site:
-        case "Austin":
-            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".mff")]
-            raw = concatenate_raws(raws)
+    ## reading files
+    match suffix:
+        case ".mff":
+            raw = concatenate_raws([read_raw(fname) for fname in fnames])
             raw.drop_channels(ch_names="VREF")
             montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
-        case "Dublin":
-            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".bdf")]
-            raw = concatenate_raws(raws)
+        case ".bdf":
+            raw = concatenate_raws([read_raw(fname) for fname in fnames])
             raw.pick(["eeg", "stim"])
             montage = make_standard_montage("easycap-M1")
 
-        case "Ghent":
-            raise NotImplementedError
+        case ".cdt":
+            fnames = [fname.with_suffix(".dpa") for fname in fnames]
+            raw = concatenate_raws([read_raw(fname) for fname in fnames])
 
-        case "Illinois":
-            [os.rename(fname, f"{fname[:-3]}.dpa") for fname in fnames if fname.endswith(".dpo")]
-            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".cdt")]
-            
-        case "Regensburg":
-            raws = []
-            for fname in fnames:
-                if fname.endswith(".vhdr"):
-                    raws.append(_read_vhdr_input_fname(fname_paradigm / fname, subject_id, paradigm))
-            raw = concatenate_raws(raws)
-            montage = make_standard_montage("easycap-M1")
+        case ".ds":
+            raw = concatenate_raws([read_raw(fname) for fname in fnames])
             raw.pick(["eeg", "stim"])
 
-        case "Tuebingen":
-            raws = [read_raw(fname_paradigm / fname) for fname in fnames if fname.endswith(".ds")]
-            raw = concatenate_raws(raws)
-            raw.pick(["eeg", "stim"])
-
-        case "Zuerich": 
-            fname = fname_paradigm / f"{subject_id}_{paradigm}.vhdr"
-            if not fname.exists():
-                raise ValueError(f"Subject {subject_id}_{paradigm}.vhdr not found in the EEG directory!")
-            
-            captrak_dir = subjects_dir / subject_id / "EEG" / "captrack"
-            try:
-                for file_ck in os.listdir(captrak_dir):
-                    if file_ck.endswith(".bvct"): 
-                        montage = read_dig_captrak(file_ck)
-            except:
+        case ".vhdr":   
+            if site == "Regensburg":
+                raw = concatenate_raws([read_vhdr_input_fname(fname) for fname in fnames])
+                raw.pick(["eeg", "stim"]) 
                 montage = make_standard_montage("easycap-M1")
 
-            ch_types = {"O1": "eog",
-                        "O2": "eog",
-                        "PO7": "eog",
-                        "PO8": "eog",
-                        "Pulse": "ecg",
-                        "Resp": "ecg",
-                        "Audio": "stim"
-                        }
-            
-            raw = _read_vhdr_input_fname(fname, subject_id, paradigm)
-            raw.set_channel_types(ch_types)
-            raw.pick(["eeg", "eog", "ecg", "stim"])
+            if site == "Zuerich":
+                captrak_dir = Path(fname).parent / "captrack"
+                try:
+                    for file_ck in os.listdir(captrak_dir):
+                        if file_ck.endswith(f"_{subject_id}.bvct"): # assume that its same for both visits
+                            montage = read_dig_captrak(file_ck)
+                except:
+                    montage = make_standard_montage("easycap-M1")
+
+                ch_types = {"O1": "eog",
+                            "O2": "eog",
+                            "PO7": "eog",
+                            "PO8": "eog",
+                            "Pulse": "ecg",
+                            "Resp": "ecg",
+                            "Audio": "stim"
+                            }
+                raw = read_vhdr_input_fname(Path(fname))
+                raw.set_channel_types(ch_types)
+                raw.pick(["eeg", "eog", "ecg", "stim"])
     
+    ## now the real part
     raw.load_data()
     raw.set_montage(montage=montage, match_case=False, on_missing="warn")
-    raw.info["subject_info"] = {"his_id": site}
+    logging.info(f"EEG file(s) are loaded into memory and montaged to standard frame.")
+
+    if raw.info["sfreq"] > 1000.0:
+        raw.resample(1000, stim_picks=None)
+
+    ## add information to raw 
+    raw.info["experimenter"] = site
+    raw.info["subject_info"] = {"first_name": subject_id}
+    raw.info["description"] = paradigm
+    
+    orig_fname = subject_dir / "orig" / f"raw_{paradigm}.fif" 
+    if orig_fname.exists():
+        if overwrite == "warn":
+            warn(f"The preprocessed raw {orig_fname} already exist.")
+        if overwrite == "raise":
+            raise FileExistsError(f"The preprocessed raw {orig_fname} already exist.")
+        
+    raw.save(orig_fname, overwrite=True)
+    logging.info(f"Raw EEG recording saved in the {str(subject_id)} directory")
 
     ## resampling, filtering and re-referencing 
     tqdm.write("Resampling, filtering and re-referencing ...\n")
     progress.update(1)
     raw.resample(sfreq=250, stim_picks=None)
+    logging.info(f"Raw EEG resampled to 250 Hz.")
 
-    if paradigm == "rest":
+    if paradigm.startswith("rest"):
         l_freq, h_freq = 0.1, 100
         if site in ["Illinois", "Austin"]:
             line_freq = 60
         else:
             line_freq = 50
         raw.notch_filter(freqs=line_freq, picks="eeg", notch_widths=1)
+        logging.info(f"Raw EEG notch filtered at {line_freq} Hz, with width of 1 Hz.")
     else:
         l_freq, h_freq = 1, 40
 
     raw.filter(picks="eeg", l_freq=l_freq, h_freq=h_freq)
+    logging.info(f"Raw EEG bandpass filtered between {l_freq} and {h_freq} Hz."
+                    "for more information on filter type see:"
+                    "https://mne.tools/stable/auto_tutorials/preprocessing/25_background_filtering.html"
+                )
     raw.set_eeg_reference("average", projection=True)
     raw.apply_proj()
+    logging.info(f"Average reference applied to raw data.")
     
     ## eeg plotting for annotating
     if psd_check:
@@ -211,9 +286,16 @@ def preprocessing(
     if manual_data_scroll:
         raw.annotations.append(onset=0, duration=0, description="bad_segment")
         raw.plot(duration=20.0, n_channels=80, picks="eeg", scalings=dict(eeg=40e-6), block=True)
-    raw.interpolate_bads()
+    
+    if len(raw.info["bads"]):
+        logging.info(f"{raw.info['bads']} are interpolated.")
+        raw.interpolate_bads()
+    else:
+        logging.info(f"No bad channel was selected for interpolation.")
+    
     
     ## ICA
+    show = False
     if run_ica:
         tqdm.write("Running ICA ...\n")
         progress.update(1)
@@ -238,10 +320,11 @@ def preprocessing(
         if len(eog_indices) > 0:
             eog_components = ica.plot_properties(raw,
                                                 picks=eog_indices,
-                                                show=False,
+                                                show=show,
                                                 )
             eog_indices_fil = [x for x in eog_indices if x <= 10]
         ica.apply(raw, exclude=eog_indices_fil)
+        logging.info(f"ICA analysis was performed and {len(eog_indices_fil)} eye related components were dropped.")
     
     if ssp_ecg:
         tqdm.write("Finding and removing ECG related components...\n")
@@ -258,6 +341,7 @@ def preprocessing(
         ## compute and apply projection
         ecg_projs, _ = compute_proj_ecg(raw, n_eeg=2, reject=None)
         raw.add_proj(ecg_projs)
+        logging.info(f"ECG projection was computed and applied to data.")
 
     if ssp_eog:
         tqdm.write("Finding and removing vertical and horizontal EOG components...\n")
@@ -268,6 +352,7 @@ def preprocessing(
         ev_eog.apply_baseline((None, None))
         veog_projs, _ = compute_proj_eog(raw, n_eeg=2, reject=None)
         raw.add_proj(veog_projs)
+        logging.info(f"Vertical EOG projection was computed and applied to data.")
 
         ## horizontal
         ica = ICA(n_components=0.97, max_iter=800, method='infomax', fit_params=dict(extended=True))        
@@ -275,14 +360,15 @@ def preprocessing(
         eog_indices, eog_scores = ica.find_bads_eog(raw, ch_name=["O1", "O2"], threshold=2)
         eog_indices_fil = [x for x in eog_indices if x <= 10]
         heog_idxs = [eog_idx for eog_idx in eog_indices_fil if eog_scores[0][eog_idx] * eog_scores[1][eog_idx] < 0]
-        fig_scores = ica.plot_scores(scores=eog_scores, exclude=eog_indices_fil)
+        fig_scores = ica.plot_scores(scores=eog_scores, exclude=eog_indices_fil, show=show)
 
         if len(heog_idxs) > 0:
             eog_sac_components = ica.plot_properties(raw,
-                                                picks=heog_idxs,
-                                                show=False,
-                                                )
+                                                    picks=heog_idxs,
+                                                    show=show,
+                                                    )
         ica.apply(raw, exclude=heog_idxs)
+        logging.info(f"Horizontal EOG component ffrom ICA was detected and dropped from data.")
 
     raw.apply_proj()
 
@@ -290,12 +376,15 @@ def preprocessing(
     tqdm.write("Creating report and saving...\n")
     progress.update(1)
     if create_report:
+        logging.info(f"Report file initiated.")
         report = Report(title=f"report_subject_{subject_id}")
         report.add_raw(raw=raw, title="Recording Info", butterfly=False, psd=True)
+        logging.info(f"General information was added to report.")
 
         if run_ica:
             if len(eog_indices_fil) > 0:
                 report.add_figure(fig=eog_components, title="EOG Components", image_format="PNG")
+                logging.info(f"EOG components from ICA were added to report.")
         
         if ssp_ecg:
             fig_ev_pulse, ax = plt.subplots(1, 1, figsize=(7.5, 3))
@@ -311,6 +400,7 @@ def preprocessing(
 
             for fig, title in zip([fig_ev_pulse, fig_ecg, fig_proj], ["Pulse Oximetry Response", "ECG", "ECG Projections"]):
                 report.add_figure(fig=fig, title=title, image_format="PNG")
+                logging.info(f"ECG projection added to report.")
 
         if ssp_eog:
             fig_ev_eog, ax = plt.subplots(1, 1, figsize=(7.5, 3))
@@ -328,40 +418,23 @@ def preprocessing(
                 report.add_figure(fig=fig, title=title, image_format="PNG")
             if len(heog_idxs) > 0:
                 report.add_figure(fig=eog_sac_components, title="EOG Saccade Components", image_format="PNG")
+            logging.info(f"Vertical EOG plots added to report.")
+            logging.info(f"Horizontal EOG plots added to report.")
 
-        if saving_dir == None:
-            saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
-        report.save(fname=saving_dir.parent / "reports" / f"{paradigm}.h5", open_browser=False, overwrite=True)
+        ## saving stuff     
+        prep_fname = subject_dir / "preprocessed" / f"raw_{paradigm}.fif"
+        if prep_fname.exists():
+            if overwrite == "warn":
+                warn(f"The preprocessed raw {prep_fname} already exist.")
+            if overwrite == "raise":
+                raise FileExistsError(f"The preprocessed raw {prep_fname} already exist.")
 
-    if not saving_dir is False:
-        raw.save(fname=saving_dir / "raw_prep.fif", overwrite=True)
+        raw.save(prep_fname, overwrite=True)   
+        logging.info(f"Preprocessed eeg recording was saved in {subject_id} directory.")
+        report.save(fname=subject_dir / "reports" / f"{paradigm}.h5", open_browser=False, overwrite=True)
+        logging.info(f"Report was saved in {subject_id} directory.")
         
     tqdm.write("\033[32mEEG data were preprocessed sucessfully!\n")
     progress.update(1)
     progress.close()
-
-
-def _read_vhdr_input_fname(fname, subject_id, paradigm):
-    """
-    Checks .vhdr and .vmrk data to have same names, otherwise fix them.
-    """
-    try:
-        raw = read_raw(fname)
-    except:
-        with open(fname, "r") as file:
-            lines = file.readlines()
-
-        lines[5] = f'DataFile={subject_id}_{paradigm}.eeg\n'
-        lines[6] = f'MarkerFile={subject_id}_{paradigm}.vmrk\n'
-
-        with open(fname, "w") as file:
-            file.writelines(lines)
-        with open(f"{str(fname)[:-4]}vmrk", "r") as file:
-            lines = file.readlines()
-
-        lines[4] = f'DataFile={subject_id}_{paradigm}.eeg\n'
-        with open(f"{str(fname)[:-4]}vmrk", "w") as file:
-            file.writelines(lines)
-
-        raw = read_raw(fname)
-    return raw
+    logging.info(f"Preprocessing finished without an error.")

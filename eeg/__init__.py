@@ -1,2 +1,2 @@
-from .eeg_preprocessing import preprocessing
-from .eeg_processing import run_rs_analysis, run_erp_analysis
+from .eeg_preprocessing import preprocess
+# from .eeg_processing import process

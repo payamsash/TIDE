@@ -51,6 +51,7 @@ pure_eval==0.2.3
 Pygments==2.19.1
 pymatreader==1.0.0
 PyOpenGL==3.1.9
+PyOpenGL-accelerate==3.1.9
 pyparsing==3.2.3
 PyQt6==6.9.0
 PyQt6-Qt6==6.9.0
@@ -60,6 +61,7 @@ pyriemann==0.8
 python-dateutil==2.9.0.post0
 pytz==2025.2
 PyWavelets==1.8.0
+PyYAML==6.0.2
 pyzmq==26.4.0
 QDarkStyle==3.2.3
 QtPy==2.4.3
