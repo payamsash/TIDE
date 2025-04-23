@@ -109,7 +109,6 @@ def preprocess(
     ssp_eog = config.get("ssp_eog", True)
     ssp_ecg = config.get("ssp_ecg", True)
     create_report = config.get("create_report", True)
-    verbose = config.get("verbose", "ERROR")
 
     ## only check inputs
     _check_preprocessing_inputs(fname,
@@ -131,7 +130,6 @@ def preprocess(
     ## check subject_dir and create if not there
     subjects_dir = Path(subjects_dir)
     subject_dir = subjects_dir / subject_id
-
     created = False
     if not Path.is_dir(subjects_dir / subject_id):
         create_subject_dir(subject_id, subjects_dir)
@@ -142,7 +140,6 @@ def preprocess(
                                 config,
                                 type="preprocessing"
                                 )
-
 
     if created:
         logging.info("preprocessing script initiated and subject directory has been created.")
@@ -177,7 +174,6 @@ def preprocess(
             i += 1
     else:
         fnames = [fname]
-
     logging.info(f"Following EEG files are selected to be read: {[str(p) for p in fnames]}")
 
     ## reading files

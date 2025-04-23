@@ -1,7 +1,7 @@
 import yaml
 import logging
 from pathlib import Path
-from mne import sys_info
+from mne import sys_info, read_info
 from mne.io import read_raw
 
 def load_config(site,
@@ -14,7 +14,7 @@ def load_config(site,
     return config.get(site, {})
 
 
-def initiate_logging(logfile, config, type="preprocessing"):
+def initiate_logging(logfile, config, analysis_type="preprocessing"):
 
     ## add system and config information
     yaml_str = yaml.dump(config, default_flow_style=False)
@@ -32,7 +32,7 @@ def initiate_logging(logfile, config, type="preprocessing"):
         f.write('\n')
 
         f.write('*' * 100 + '\n')
-        f.write('{:^100}\n'.format(f'Preprocessing'))
+        f.write('{:^100}\n'.format(f'{analysis_type.upper()}'))
         f.write('*' * 100 + '\n\n')
 
     logging.basicConfig(
@@ -74,10 +74,6 @@ def _check_preprocessing_inputs(fname,
     paradigms = ["rest", "rest_v1", "rest_v2", "gpias", "xxxxx", "xxxxy", "omi", "regularity"]
     if not paradigm in paradigms: raise ValueError(f"paradigm must be one of the {paradigms}.")
 
-    if not isinstance(psd_check, bool): raise TypeError(f"psd_check must be boolean, got type {type(psd_check).__name} instead.")
-    if not isinstance(manual_data_scroll, bool): raise TypeError(f"manual_data_scroll must be boolean, got type {type(manual_data_scroll).__name} instead.")
-    if not isinstance(run_ica, bool): raise TypeError(f"run_ica must be boolean, got type {type(run_ica).__name} instead.")
-
     for var_name, var_value in {
                                 "psd_check": psd_check,
                                 "manual_data_scroll": manual_data_scroll,
@@ -111,6 +107,41 @@ def _check_preprocessing_inputs(fname,
             else:
                 assert site == expected, f"site is not selected correctly for {ext}."
             break
+
+def _check_processing_inputs(manual_data_scroll,
+                                automatic_epoch_rejection,
+                                source_analysis,
+                                subjects_fs_dir,
+                                create_report,
+                                verbose,
+                                overwrite
+                                ):
+
+    """
+    Checks input variables, raise or warn some messages.
+    """
+
+    ## initial checks
+    for var_name, var_value in {
+                                "manual_data_scroll": manual_data_scroll,
+                                "source_analysis": source_analysis,
+                                "create_report": create_report
+                                }.items():
+        if not isinstance(var_value, bool): raise TypeError(f"{var_name} must be boolean, got type {type(var_value).__name__} instead.")
+
+    automatic_epoch_rejection_options = ["ptp", "autoreject", "pyriemann"]
+    if not (automatic_epoch_rejection in automatic_epoch_rejection_options or automatic_epoch_rejection is None):
+        raise ValueError(f"automatic_epoch_rejection must be None or one of the {automatic_epoch_rejection_options}.")
+    
+    if not (subjects_fs_dir is None or isinstance(subjects_fs_dir, (str, Path))): 
+        raise TypeError("subjects_fs_dir must be None or a path to FS subjects directory.")
+    
+    verboses = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    if not (verbose in verboses or isinstance(verbose, bool)): raise ValueError(f"verbose must be one of the {verboses} or boolean.") 
+
+    overwrite_options = ["warn", "ignore", "raise"]
+    if not overwrite in overwrite_options: raise ValueError(f"overwrite must be one of the {overwrite_options}.")
+    
 
 def create_subject_dir(subject_id, subjects_dir):
     """

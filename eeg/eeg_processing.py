@@ -1,9 +1,10 @@
 # Written by Payam S. Shabestari, Zurich, 01.2025 
 # Email: payam.sadeghishabestari@uzh.ch
-
+import os
+from tools import load_config, _check_processing_inputs, initiate_logging
 import warnings
 from pathlib import Path
-import yaml
+import random
 from tqdm import tqdm
 import time
 
@@ -30,18 +31,21 @@ from mne import (set_log_level,
                 make_ad_hoc_cov,
                 compute_covariance,
                 open_report,
-                concatenate_epochs
+                concatenate_epochs,
+                read_info
                 )
 
-def run_rs_analysis(
+def process(
         subject_id,
-        subjects_dir=None,
-        overwrite=False,
-        config_file="preprocessing-config.yaml",
+        subjects_dir,
+        paradigm,
+        config_file=None,
+        overwrite="warn",
+        verbose="ERROR",
         **kwargs
         ):
     
-    """ Sensor and source space analysis of the preprocessed resting-state eeg recordings from BrainVision device.
+    """ Sensor and source space analysis of the preprocessed resting-state eeg recordings.
         The process could be fully or semi automatic based on user choice.
 
         Parameters
@@ -89,218 +93,317 @@ def run_rs_analysis(
             used for other purposes.
         """
     
+    ## get site
+    if not isinstance(subject_id, str): raise TypeError(f"subject_id must be str, got type {type(subject_id).__name} instead.")
+    if not isinstance(subjects_dir, (str, Path)): raise TypeError(f"subjects_dir must be str or Path object, got type {type(subjects_dir).__name} instead.")
+    subject_dir = Path(subjects_dir) / subject_id
+    prep_fname = subject_dir / "preprocessed" / f"raw_{paradigm}.fif"
+    info = read_info(prep_fname)
+    site = info["experimenter"]
+    assert subject_id == info["subject_info"]["first_name"], \
+        f"Subject ID mismatch ({subject_id} != {info["subject_info"]["first_name"]}) between preprocess and processing sections."
+    assert paradigm == info["description"], f"paradigm mismatch: {paradigm} != {info["description"]}"
+    
     ## get values from config file
-    config = load_site_config(site, config_file)
+    if config_file is None:
+        yaml_file = os.path.join(os.path.dirname(__file__), 'processing-config.yaml')
+        config = load_config(site, yaml_file)
+    else:
+        config = load_config(site, config_file)
+    
     config.update(kwargs)
-    psd_check = config.get("psd_check", True)
+    event_ids = config.get("event_ids", [6, 4])
     manual_data_scroll = config.get("manual_data_scroll", True)
-    run_ica = config.get("run_ica", False)
-    manual_ica_removal = config.get("manual_ica_removal", False)
-    ssp_eog = config.get("ssp_eog", True)
-    ssp_ecg = config.get("ssp_ecg", True)
+    automatic_epoch_rejection = config.get("automatic_epoch_rejection", None)
+    source_analysis = config.get("source_analysis", True)
+    subjects_fs_dir = config.get("subjects_fs_dir", None)
     create_report = config.get("create_report", True)
-    verbose = config.get("verbose", "ERROR")
 
+    ## only check inputs
+    _check_processing_inputs(manual_data_scroll,
+                                automatic_epoch_rejection,
+                                source_analysis,
+                                subjects_fs_dir,
+                                create_report,
+                                overwrite,
+                                verbose
+                                )
+    ## start logging
+    logging = initiate_logging(
+                                subject_dir / "logs" / f"{paradigm}_processing.log",
+                                config,
+                                analysis_type="processing"
+                                )
+    logging.info(f"Processing script initiated on subject {subject_id}, {paradigm} paradigm.")
     set_log_level(verbose=verbose)
-    total = 10 if mri else 8
-    progress = tqdm(total=total,
+    progress = tqdm(total=10,
                     desc="",
                     ncols=50,
                     colour="cyan",
                     bar_format='{l_bar}{bar}'
                     )
-    
     time.sleep(1)
     tqdm.write("Loading preprocessed EEG data ...\n")
     progress.update(1)
-
-    if subjects_dir == None:
-        subjects_dir = Path.cwd().parent / "subjects"
-    else:
-        subjects_dir = Path(subjects_dir)
-
-    paradigm = f"rest_v{visit}"
-    fname = subjects_dir / subject_id / "EEG" / paradigm / "raw_prep.fif"
-    raw = read_raw_fif(fname, preload=True)
-    info = raw.info
+    raw = read_raw_fif(prep_fname, preload=True)
+    logging.info(f"Preprocessed raw loaded to memory.")
     
+    ## the real part
+    epochs_dir = subject_dir / "epochs"
+    if paradigm.startswith("rest"):
+        epochs_list = run_rs_processing(raw, event_ids, progress, logging)
+        if len(epochs_list) == 2:
+            epochs_eo, epochs_ec = epochs_list
+            if manual_data_scroll:
+                epochs_eo.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
+                epochs_ec.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
+
+            epochs_eo = reject_epochs(epochs_eo, automatic_epoch_rejection)
+            epochs_ec = reject_epochs(epochs_ec, automatic_epoch_rejection)
+
+            epochs_eo.save(fname=epochs_dir / f"epochs-{paradigm}-eo.fif", overwrite=True)
+            epochs_ec.save(fname=epochs_dir / f"epochs-{paradigm}-ec.fif", overwrite=True)
+            logging.info(f"epochs are saved.")
+
+        else:
+            epochs_eo = epochs_list[0]
+            if manual_data_scroll:
+                epochs_eo.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
+            epochs_eo = reject_epochs(epochs_eo, automatic_epoch_rejection)
+            epochs_eo.save(fname=epochs_dir / f"epochs-{paradigm}-eo.fif", overwrite=True)
+            logging.info(f"epochs are saved.")
+
+    else:
+        epochs = run_erp_processing(raw)
+        if manual_data_scroll:
+            epochs.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
+        epochs = reject_epochs(epochs, automatic_epoch_rejection)
+        epochs.save(fname=epochs_dir / f"epochs-{paradigm}.fif", overwrite=True)
+        logging.info(f"epochs are saved.")
+
+    ## source analysis 
+    if len(raw.info["projs"]) == 0:
+        raw.set_eeg_reference("average", projection=True)
+    if source_analysis:
+        inv = run_source_analysis(epochs)
+        write_inverse_operator(
+                                fname=subject_dir / "inv" / "{paradigm}-inv.fif",
+                                inv=inv,
+                                overwrite=True
+                                )
+            
+    ## create a report
+    if create_report:
+        tqdm.write("Creating report...\n")
+        logging.info(f"creating report...")
+        progress.update(1)
+        fname_report = subject_dir / "reports" / f"{paradigm}.h5"
+        report = open_report(fname_report)
+
+        if paradigm.startswith("rest") and len(epochs_list) == 2:
+            epochs_concat = concatenate_epochs(epochs_list)
+        elif paradigm.startswith("rest") and len(epochs_list) == 1:
+            epochs_concat = epochs_eo
+        else:
+            epochs_concat = epochs
+        
+        fig_drop = epochs_concat.plot_drop_log()
+        report.add_figure(fig=fig_drop, title="Epochs drop log", image_format="PNG")
+
+        ## saving
+        report.save(fname=f"{fname_report.stem}.html", open_browser=False, overwrite=True)
+    
+    tqdm.write("\033[32mAnalysis finished successfully!\n")
+    progress.update(1)
+    progress.close()
+
+
+def run_rs_processing(raw, event_ids, progress, logging):
+
     tqdm.write("Creating epochs...\n")
     progress.update(1)
 
-    ## be cautious
-    events, _ = events_from_annotations(raw)
-    if event_ids == None: # zurich device
+    events, events_dict = events_from_annotations(raw)
 
-        if len(events) == 0:
-            print("This recording is only eyes open or eyes closed.")
-            both_conditions = False
-            tmin = 5
-            raw.crop(tmin=tmin)
-            epochs_eo = make_fixed_length_epochs(raw, duration=2) 
+    if len(events) == 0:
+        logging.info("This recording is only eyes open or eyes closed.")
+        logging.info(f"events_dict : {events_dict}")
+        both_conditions = False
+        tmin = 5
+        raw.crop(tmin=tmin)
+        logging.info(f"{tmin} seconds are cropped from beginning of the data.")
+        epochs_eo = make_fixed_length_epochs(raw, duration=2) 
+        logging.info(f"{len(epochs_eo)} fixed length (2s) eyes-open epochs are created.")
 
-        elif len(events) == 1:
-            print("This recording is only eyes open or eyes closed.")
-            both_conditions = False
-            tmin = max(np.squeeze(events)[0] / info["sfreq"] + 3, 5) # 3 seconds skip
-            raw.crop(tmin=tmin)
-            epochs_eo = make_fixed_length_epochs(raw, duration=2)
+    elif len(events) < 4:
+        logging.info("This recording is only eyes open or eyes closed.")
+        logging.info(f"events_dict : {events_dict}")
+        both_conditions = False
+        tmin = max(np.squeeze(events)[-1] / 250 + 3, 5) # 3 seconds skip
+        raw.crop(tmin=tmin)
+        logging.info(f"{tmin} seconds are cropped from beginning of the data.")
+        epochs_eo = make_fixed_length_epochs(raw, duration=2)
+        logging.info(f"{len(epochs_eo)} fixed length (2s) eyes-open epochs are created.")
 
-        elif len(events) > 1:
-            both_conditions = True
-            events_ec = events[:, 0][events[:, 2] == 6]  ## assume 6 is eyes closed
-            events_eo = events[:, 0][events[:, 2] == 4]  ## assume 4 is eyes open
-    
-    else: # add other sites here
+    elif len(events) > 3:
         both_conditions = True
-        events_ec = events[:, 0][events[:, 2] == list(event_ids.keys())[0]]
-        events_eo = events[:, 0][events[:, 2] == list(event_ids.keys())[1]]
+        events_ec = events[:, 0][events[:, 2] == event_ids[0]]  ## eyes closed
+        events_eo = events[:, 0][events[:, 2] == event_ids[1]]  ## eyes open
 
     # add skip couple of seconds
     if both_conditions:
         if len(events_ec) != len(events_eo):
-            raise ValueError("Number of eyes open and eyes close events don't not match.")
+            raise ValueError(f"Number of eyes close and eyes open events don't match. {len(events_ec)} != {len(events_eo)}")
 
+        logging.info(f"{len(events_eo)} events for eyes open and {len(events_ec)} events for eyes closed are detected.")
         raws_ec, raws_eo = [], []
-        for ec_s, eo_s in zip(events_ec, events_eo):
-            tmin = ec_s / info["sfreq"] + 3 # skip few seconds
-            tmax = eo_s / info["sfreq"] 
-            raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+        if events_ec[0] < events_eo[0]:
+            mean_dist = np.mean(events_eo - events_ec)
+            events_ec = np.append(events_ec, events_ec[-1] + mean_dist)
 
-        for ec_o, ec_s in zip(events_eo[:-1], events_ec[1:]):
-            tmin = ec_o / 250 + 3 # skip few seconds
-            tmax = ec_s / 250
-            raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+            for ec_s, eo_s in zip(events_ec[:-1], events_eo):
+                tmin = ec_s / raw.info["sfreq"] + 3 # skip few seconds
+                tmax = eo_s / raw.info["sfreq"] 
+                raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+            for ec_o, ec_s in zip(events_eo, events_ec[1:]):
+                tmin = ec_o / 250 + 3 # skip few seconds
+                tmax = ec_s / 250
+                raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+
+        if events_ec[0] > events_eo[0]:
+            mean_dist = np.mean(events_ec - events_eo)
+            events_eo = np.append(events_eo, events_eo[-1] + mean_dist)
+
+            for ec_o, eo_c in zip(events_eo[:-1], events_ec):
+                tmin = ec_o / raw.info["sfreq"] + 3 # skip few seconds
+                tmax = eo_c / raw.info["sfreq"] 
+                raws_eo.append(raw.copy().crop(tmin=tmin, tmax=tmax))
+            for ec_c, ec_o in zip(events_ec, events_eo[1:]):
+                tmin = ec_c / 250 + 3 # skip few seconds
+                tmax = ec_o / 250
+                raws_ec.append(raw.copy().crop(tmin=tmin, tmax=tmax))
 
         epochs_ec, epochs_eo = [make_fixed_length_epochs(
                                                         concatenate_raws(raw_e),
                                                         duration=2
                                                         ) for raw_e in [raws_ec, raws_eo]]
+        return [epochs_eo, epochs_ec]
+    else:
+        return [epochs_eo]
+
+
+def run_erp_processing(raw, events, event_ids, progress, logging):
+    
+    match raw.info["description"]:
+        case "gpias":
+            baseline = None
+            raise NotImplementedError
+        case "omi" | "xxxxx" | "xxxxy":
+            baseline = (None, 0)
+
+    tqdm.write("Creating epochs...\n")
+    progress.update(1)
+    epochs = Epochs(raw=raw,
+                    events=events,
+                    event_id=event_ids,
+                    tmin=-0.2,
+                    tmax=0.5,
+                    reject_by_annotation=True,
+                    baseline=baseline
+                    )
     del raw
+
+    return epochs
     
-    ## check manual_data_scroll
-    if manual_data_scroll:
-        epochs_eo.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
-        if both_conditions:
-            epochs_ec.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
     
-    if saving_dir is None:
-        saving_dir = subjects_dir / subject_id / "EEG" / f"{paradigm}"
+
+def reject_epochs(epochs, automatic_epoch_rejection):    
 
     ## drop and save epochs
-    if not automatic_epoch_rejection == False:
-        if automatic_epoch_rejection == "ptp":
-            reject = dict(eeg=40e-6)
-            flat = dict(eeg=1e-7)
-            epochs_eo.drop_bad(reject=reject, flat=flat)
+    if automatic_epoch_rejection is None:
+        pass
+    if automatic_epoch_rejection == "ptp":
+        reject = dict(eeg=40e-6)
+        flat = dict(eeg=1e-7)
+        epochs.drop_bad(reject=reject, flat=flat)
+    if automatic_epoch_rejection == "autoreject":
+        ar = AutoReject()
+        ar.fit(epochs)
+        epochs = ar.transform(epochs)
+    if automatic_epoch_rejection == "pyriemann":
+        train_covs = int(0.7 * len(epochs))  # nb of matrices to train the potato (70%)
+        train_set = [random.randint(0, len(epochs)) for _ in range(train_covs)]
+        covs = Covariances(estimator="lwf").transform(epochs.get_data())
+        potato = Potato(metric="riemann", threshold=3, n_iter_max=100).fit(covs[train_set])
+        p_labels = potato.predict(covs)
+        bad_idxs = np.where(p_labels == 0)[0]
+        epochs.drop(bad_idxs)
 
-        if automatic_epoch_rejection == "autoreject":
-            ar = AutoReject()
-            ar.fit(epochs_eo)
-            epochs_eo = ar.transform(epochs_eo)
-
-        if automatic_epoch_rejection == "pyriemann":
-            train_covs = int(0.7 * len(epochs_noisy))  # nb of matrices to train the potato (70%)
-            train_set = [random.randint(0, len(epochs_noisy)) for _ in range(train_covs)]
-            covs = Covariances(estimator="lwf").transform(epochs_noisy.get_data())
-            potato = Potato(metric="riemann", threshold=z_th, n_iter_max=100).fit(covs[train_set])
-            p_center = potato._mdm.covmeans_[0]
-            p_labels = potato.predict(covs)
-            bad_idxs = np.where(p_labels == 0)[0]
-
-    epochs_eo.save(fname=saving_dir / f"epochs-eo-epo.fif", overwrite=overwrite)
-    if both_conditions:
-        epochs_ec.save(fname=saving_dir / f"epochs-ec-epo.fif", overwrite=overwrite)
+    return epochs
+    
             
-    if source_analysis:
-        if mri:
-            kwargs = {"subject": subject_id,
-                    "subjects_dir": subjects_fs_dir
-                    }
-            
-            tqdm.write("Setting up bilateral hemisphere surface-based source space with subsampling ...\n")
-            progress.update(1)
-            src = setup_source_space(**kwargs)
+def run_source_analysis(epochs, subjects_fs_dir, progress, logging):
 
-            tqdm.write("Creating a BEM model for subject ...\n")
-            progress.update(1)
-            bem_model = make_bem_model(**kwargs)  
-            bem = make_bem_solution(bem_model)
-
-            tqdm.write("Coregistering MRI with a subjects head shape ...\n")
-            progress.update(1)
-            coreg = Coregistration(info, subject_id, subjects_fs_dir, fiducials='auto')
-            coreg.fit_fiducials()
-            coreg.fit_icp(n_iterations=40, nasion_weight=2.0) 
-            coreg.omit_head_shape_points(distance=5.0 / 1000)
-            coreg.fit_icp(n_iterations=40, nasion_weight=10)
-            trans = coreg.trans
-
-        else:    
-            kwargs = {"subject": "fsaverage",
-                    "subjects_dir": None
-                    }
-            tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
-            progress.update(1)
-            fs_dir = fetch_fsaverage()
-            trans = fs_dir / "bem" / "fsaverage-trans.fif"
-            src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
-            bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
-
-        tqdm.write("Computing forward solution ...\n")
-        progress.update(1)
-        fwd = make_forward_solution(info,
-                                    trans=trans,
-                                    src=src,
-                                    bem=bem,
-                                    meg=False,
-                                    eeg=True
-                                    )
+    if epochs.info["description"].startswith("rest"):
+        epochs = epochs[0]
         tqdm.write("Using ad hoc noise covariance for the recording ...\n")
         progress.update(1)
-        noise_cov = make_ad_hoc_cov(info)
+        noise_cov = make_ad_hoc_cov(epochs.info)
+    else:
+        noise_cov = compute_covariance(epochs)
 
-        ## add a condition for GPIAS to use ad hoc noise covariance
-        tqdm.write("Computing the minimum-norm inverse solution ...\n")
-        progress.update(1)
-        inverse_operator = make_inverse_operator(info,
-                                                fwd,
-                                                noise_cov
-                                                )
+    if subjects_fs_dir is None:
+        kwargs = {
+                    "subject": "fsaverage",
+                    "subjects_dir": subjects_fs_dir
+                }
         
-        write_inverse_operator(fname=saving_dir / "operator-inv.fif",
-                                inv=inverse_operator,overwrite=overwrite)
-
-    ## create a report
-    if create_report:
-        tqdm.write("Creating report...\n")
+        tqdm.write("Loading MRI information of Freesurfer template subject ...\n")
         progress.update(1)
-        fname_report = subjects_dir / subject_id / "EEG" / "reports" / f"{paradigm}.h5"
-        report = open_report(fname_report)
-        if both_conditions:
-            epochs_concat = concatenate_epochs([epochs_ec, epochs_eo])
-        else:
-            epochs_concat = epochs_eo
-        fig_drop = epochs_concat.plot_drop_log()
-        report.add_figure(fig=fig_drop, title="Epochs drop log", image_format="PNG")
+        fs_dir = fetch_fsaverage()
+        trans = fs_dir / "bem" / "fsaverage-trans.fif"
+        src = fs_dir / "bem" / "fsaverage-ico-5-src.fif"
+        bem = fs_dir / "bem" / "fsaverage-5120-5120-5120-bem-sol.fif"
 
-        ## source space
-        if source_analysis:
-            report.add_bem(title="MRI & BEM",
-                            decim=10,
-                            width=512,
-                            **kwargs
-                            )
-            report.add_trans(trans=trans,
-                            info=info,
-                            title="Co-registration",
-                            **kwargs
-                            )
-        ## saving
-        report.save(fname=f"{fname_report.as_posix()[:-3]}.html", open_browser=False, overwrite=True)
-    
-    tqdm.write("\033[32mAnalysis finished successfully!\n")
+    else:
+        kwargs = {
+                    "subject": epochs.info["subject_info"]["first_name"],
+                    "subjects_dir": subjects_fs_dir
+                }
+
+        tqdm.write("Setting up bilateral hemisphere surface-based source space with subsampling ...\n")
+        progress.update(1)
+        src = setup_source_space(**kwargs)
+        tqdm.write("Creating a BEM model for subject ...\n")
+        progress.update(1)
+        bem_model = make_bem_model(**kwargs)  
+        bem = make_bem_solution(bem_model)
+        tqdm.write("Coregistering MRI with a subjects head shape ...\n")
+        progress.update(1)
+        coreg = Coregistration(epochs.info, fiducials='auto', **kwargs)
+        coreg.fit_fiducials()
+        coreg.fit_icp(n_iterations=40, nasion_weight=2.0) 
+        coreg.omit_head_shape_points(distance=5.0 / 1000)
+        coreg.fit_icp(n_iterations=40, nasion_weight=10)
+        trans = coreg.trans
+
+    tqdm.write("Computing forward solution ...\n")
     progress.update(1)
-    progress.close()
+    fwd = make_forward_solution(epochs.info,
+                                trans=trans,
+                                src=src,
+                                bem=bem,
+                                meg=False,
+                                eeg=True
+                                )
+    tqdm.write("Computing the minimum-norm inverse solution ...\n")
+    progress.update(1)
+    inverse_operator = make_inverse_operator(epochs.info,
+                                            fwd,
+                                            noise_cov
+                                            )
+
+    return inverse_operator
 
 
 
@@ -311,7 +414,6 @@ def run_erp_analysis(
         source_analysis=True,
         events=None,
         mri=False,
-        precomute_inv=False,
         subjects_fs_dir=None,
         manual_data_scroll=False,
         automatic_epoch_rejection=False,
@@ -636,7 +738,5 @@ def _detect_gpias_events(
     
     events = _detect_peaks(pk_heights, peak_idxs, stim_ch, times, height_limits, events_dict, stim_key, plot_peaks=plot_peaks)
     return events, events_dict
-
-
 
 

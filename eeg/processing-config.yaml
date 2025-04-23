@@ -1,0 +1,55 @@
+Zuerich:
+  event_ids: [6, 4]
+  manual_data_scroll: true
+  automatic_epoch_rejection: none
+  source_analysis: true
+  subjects_fs_dir: null
+  create_report: true
+
+Austin:
+  event_ids: [6, 4]
+  manual_data_scroll: true
+  automatic_epoch_rejection: none
+  source_analysis: true
+  subjects_fs_dir: null
+  create_report: true
+
+Dublin:
+  event_ids: [6, 4]
+  manual_data_scroll: true
+  automatic_epoch_rejection: none
+  source_analysis: true
+  subjects_fs_dir: null
+  create_report: true
+
+Ghent:
+  event_ids: [6, 4]
+  manual_data_scroll: true
+  automatic_epoch_rejection: none
+  source_analysis: true
+  subjects_fs_dir: null
+  create_report: true
+
+Illinois:
+  event_ids: [6, 4]
+  manual_data_scroll: true
+  automatic_epoch_rejection: none
+  source_analysis: true
+  subjects_fs_dir: null
+  create_report: true
+
+Regensburg:
+  event_ids: [6, 4]
+  manual_data_scroll: true
+  automatic_epoch_rejection: none
+  source_analysis: true
+  subjects_fs_dir: null
+  create_report: true
+
+Tuebingen:
+  event_ids: [6, 4]
+  manual_data_scroll: true
+  automatic_epoch_rejection: none
+  source_analysis: true
+  subjects_fs_dir: null
+  create_report: true
