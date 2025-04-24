@@ -1,7 +1,7 @@
 import yaml
 import logging
 from pathlib import Path
-from mne import sys_info, read_info
+from mne import sys_info
 from mne.io import read_raw
 
 def load_config(site,
@@ -15,6 +15,9 @@ def load_config(site,
 
 
 def initiate_logging(logfile, config, analysis_type="preprocessing"):
+    """
+    Start logging file with system and code information.
+    """
 
     ## add system and config information
     yaml_str = yaml.dump(config, default_flow_style=False)
@@ -113,10 +116,9 @@ def _check_processing_inputs(manual_data_scroll,
                                 source_analysis,
                                 subjects_fs_dir,
                                 create_report,
+                                overwrite,
                                 verbose,
-                                overwrite
                                 ):
-
     """
     Checks input variables, raise or warn some messages.
     """
@@ -143,7 +145,7 @@ def _check_processing_inputs(manual_data_scroll,
     if not overwrite in overwrite_options: raise ValueError(f"overwrite must be one of the {overwrite_options}.")
     
 
-def create_subject_dir(subject_id, subjects_dir):
+def create_subject_dir(subject_id, subjects_dir, site):
     """
     Create a structured directory for a subject under the given subjects directory.
     
@@ -159,15 +161,17 @@ def create_subject_dir(subject_id, subjects_dir):
     """
     base_path = Path(subjects_dir) / subject_id
     subdirs = [
-                "orig", "preprocessed", "mri",
+                "orig", "preprocessed",
                 "inv", "epochs", "reports", "logs",
-                "captrak"
                 ]
 
     for subdir in subdirs:
         path = base_path / subdir
         path.mkdir(parents=True, exist_ok=False)
 
+    if site == "Zuerich":
+        path = base_path / "captrak"
+        path.mkdir(parents=True, exist_ok=False)
 
 def read_vhdr_input_fname(fname):
     """

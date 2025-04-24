@@ -31,8 +31,8 @@ def preprocess(
         fname,
         subject_id,
         subjects_dir,
-        site="Zuerich",
-        paradigm="gpias",
+        site,
+        paradigm,
         config_file=None,
         overwrite="warn",
         verbose="ERROR",
@@ -44,27 +44,23 @@ def preprocess(
 
         Parameters
         ----------
+        fname : str | Path
+            eeg filename.
         subject_id : str
             The subject name, if subject has MRI data as well, should be FreeSurfer subject name, 
             then data from both modality can be analyzed at once.
         subjects_dir : path-like | None
-            The path to the directory containing the EEG subjects. The folder structure should be
-            as following which can be created by running "file_preparation" function:
-            subjects_dir/
-            ├── sMRI/
-            ├── fMRI/
-            │   ├── session_1/
-            │   ├── session_2/
-            ├── dMRI/
-            ├── EEG/
-                ├── paradigm_1/
-                ├── paradigm_2/
-                ├── ...
+            The path to the directory containing the EEG subjects. 
         site : str
-            The recording site; must be one of the following: ["Austin", "Dublin", "Ghent", "Illinois", "Regensburg", "Tuebingen"]
+            The recording site; must be one of the following: ['Austin', 'Dublin', 'Ghent', 'Illinois', 'Regensburg', 'Tuebingen']
         paradigm : str
-            Name of the EEG paradigm. should be a subfolder in the subjects_dir / subject_id containing
-            raw EEG data.
+            Name of the EEG paradigm. Name of the EEG paradigm, must be one of the: ['rest', 'rest_v1', 'rest_v2', 'gpias', 'xxxxx', 'xxxxy', 'omi', 'regularity']
+        config_file: str | Path
+            Path to the .yaml config file. If None, the default 'pre-processing-config.yaml' will be used.
+        overwrite :  str
+            must be one of the ['ignore', 'warn', 'raise'].
+        verbose : bool | str | int | None
+            Control verbosity of the logging output. If None, use the default verbosity level.
         psd_check : bool
             if True, the psd will be shown, by clicking on noisy channels, you can see the bad channel names.
         manual_data_scroll : bool
@@ -82,12 +78,8 @@ def preprocess(
             If True, will use ECG or Pulse channel to regress out ECG artifact from data.
         create_report : bool
             If True, a report will be created per recordinng.
-        saving_dir : path-like | None | bool
-            The path to the directory where the preprocessed EEG will be saved, If None, it will be saved 
-            in the same path as the raw files. If False, preprocessed data will not be saved.
-        verbose : bool | str | int | None
-            Control verbosity of the logging output. If None, use the default verbosity level.
-
+            psd_check: true
+        
         Notes
         -----
         .. This script is mainly designed for Antinomics / TIDE projects, however could be 
@@ -132,7 +124,7 @@ def preprocess(
     subject_dir = subjects_dir / subject_id
     created = False
     if not Path.is_dir(subjects_dir / subject_id):
-        create_subject_dir(subject_id, subjects_dir)
+        create_subject_dir(subject_id, subjects_dir, site)
         created = True
 
     logging = initiate_logging(
