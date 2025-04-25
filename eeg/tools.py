@@ -143,6 +143,47 @@ def _check_processing_inputs(manual_data_scroll,
 
     overwrite_options = ["warn", "ignore", "raise"]
     if not overwrite in overwrite_options: raise ValueError(f"overwrite must be one of the {overwrite_options}.")
+
+def _check_feature_extraction_inputs(
+                                    sensor_space_features,
+                                    source_space_power,
+                                    sensor_space_connectivity,
+                                    source_space_connectivity,
+                                    connectivity_method,
+                                    subjects_fs_dir,
+                                    atlas,
+                                    freq_bands,
+                                    overwrite,
+                                    verbose
+                                    ):
+    """
+    Checks input variables, raise or warn some messages.
+    """
+
+    ## initial checks
+    if not isinstance(sensor_space_features, list):
+        raise TypeError(f"{sensor_space_features} must be list, got type {type(sensor_space_features).__name__} instead.")
+    for var_name, var_value in {
+                                "source_space_power": source_space_power,
+                                "sensor_space_connectivity": sensor_space_connectivity,
+                                "source_space_connectivity": source_space_connectivity,
+                                }.items():
+        if not isinstance(var_value, bool):
+            raise TypeError(f"{var_name} must be boolean, got type {type(var_value).__name__} instead.")
+
+    connectivity_method_options = ["coh", "pli", "wpli", "cacoh", "mic", "mim", "gc", "gc_tr"]
+    if not connectivity_method in connectivity_method_options:
+        raise ValueError(f"method must be one of the {connectivity_method_options}.")
+    
+    if not (subjects_fs_dir is None or isinstance(subjects_fs_dir, (str, Path))):
+        raise TypeError(f"subjects_fs_dir must be None or path to subjects FS directory.")
+    if not atlas in ["aparc", "aparc.a2009s"]: raise ValueError(f"atlas must be one of the ['aparc', 'aparc.a2009s'].")
+    if not isinstance(freq_bands, dict): raise TypeError(f"freq_bands must be dict, got type {type(freq_bands).__name__} instead.")
+    
+    verboses = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+    if not (verbose in verboses or isinstance(verbose, bool)): raise ValueError(f"verbose must be one of the {verboses} or boolean.") 
+    overwrite_options = ["warn", "ignore", "raise"]
+    if not overwrite in overwrite_options: raise ValueError(f"overwrite must be one of the {overwrite_options}.")
     
 
 def create_subject_dir(subject_id, subjects_dir, site):
@@ -161,7 +202,7 @@ def create_subject_dir(subject_id, subjects_dir, site):
     """
     base_path = Path(subjects_dir) / subject_id
     subdirs = [
-                "orig", "preprocessed",
+                "orig", "preprocessed", "features",
                 "inv", "epochs", "reports", "logs",
                 ]
 

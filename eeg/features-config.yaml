@@ -1,0 +1,15 @@
+sensor_space_features: ["pow_freq_bands", "spect_entropy"]
+source_space_power: true
+sensor_space_connectivity: true
+source_space_connectivity: true
+connectivity_method: "coh"
+subjects_fs_dir: null
+atlas: "aparc"
+freq_bands:
+  "delta": [1, 4]
+  "theta": [4, 8]
+  "alpha": [8, 13]
+  "beta": [13, 30]
+  "lower_gamma": [30, 45]
+  "upper_gamma": [45, 80]
+            

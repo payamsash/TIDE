@@ -231,6 +231,7 @@ def run_rs_processing(raw, event_ids, progress, logging):
         raw.crop(tmin=tmin)
         logging.info(f"{tmin} seconds are cropped from beginning of the data.")
         epochs_eo = make_fixed_length_epochs(raw, duration=2) 
+        epochs_eo.load_data()
         logging.info(f"{len(epochs_eo)} fixed length (2s) eyes-open epochs are created.")
 
     elif len(events) < 4:
@@ -241,6 +242,7 @@ def run_rs_processing(raw, event_ids, progress, logging):
         raw.crop(tmin=tmin)
         logging.info(f"{tmin} seconds are cropped from beginning of the data.")
         epochs_eo = make_fixed_length_epochs(raw, duration=2)
+        epochs_eo.load_data()
         logging.info(f"{len(epochs_eo)} fixed length (2s) eyes-open epochs are created.")
 
     elif len(events) > 3:

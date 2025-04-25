@@ -130,7 +130,7 @@ def preprocess(
     logging = initiate_logging(
                                 subject_dir / "logs" / f"{paradigm}_preprocessing.log",
                                 config,
-                                type="preprocessing"
+                                analysis_type="preprocessing"
                                 )
 
     if created:
