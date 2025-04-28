@@ -1,16 +1,15 @@
 # Written by Payam S. Shabestari, Zurich, 01.2025 
 # Email: payam.sadeghishabestari@uzh.ch
-import os
-from .tools import load_config, _check_processing_inputs, initiate_logging
-import warnings
-from pathlib import Path
-import random
-from tqdm import tqdm
-import time
 
+import os
+from pathlib import Path
+import time
+import random
 import numpy as np
-from scipy.signal import find_peaks
+from tqdm import tqdm
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
+
 from autoreject import AutoReject
 from pyriemann.clustering import Potato
 from pyriemann.estimation import Covariances
@@ -33,6 +32,9 @@ from mne import (set_log_level,
                 open_report,
                 concatenate_epochs
                 )
+from .tools import (load_config,
+                    _check_processing_inputs,
+                    initiate_logging)
 
 def process(
         subject_id,
@@ -211,7 +213,7 @@ def process(
         report.save(fname=fname_report.with_suffix('.html'), open_browser=False, overwrite=True)
     
     tqdm.write("\033[32mAnalysis finished successfully!\n")
-    logging.info(f"Analysis finished successfully!")
+    logging.info(f"Analysis finished without an error!")
     progress.update(1)
     progress.close()
 

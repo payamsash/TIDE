@@ -1,25 +1,24 @@
 # Written by Payam S. Shabestari, Zurich, 01.2025 
 # Email: payam.sadeghishabestari@uzh.ch
 
-## source stuff
-## sensor connectivity via coherence 
-## source connectivity via coherence
-
 import os
-import warnings
 from pathlib import Path
-from scipy.signal import welch
-from tqdm import tqdm
+import zipfile
 import numpy as np
 import pandas as pd
+from scipy.signal import welch
+from mne_connectivity import spectral_connectivity_time
 from mne_features.feature_extraction import extract_features
+
 from mne import (set_log_level,
                     read_epochs,
                     read_labels_from_annot,
                     extract_label_time_course)
-from .tools import _check_feature_extraction_inputs, load_config, initiate_logging
-from mne.minimum_norm import read_inverse_operator, apply_inverse_epochs
-from mne_connectivity import spectral_connectivity_time
+from mne.minimum_norm import (read_inverse_operator,
+                                apply_inverse_epochs)
+from .tools import (_check_feature_extraction_inputs,
+                    load_config,
+                    initiate_logging)
 
 def extract_eeg_features(
         subject_id,
@@ -39,7 +38,6 @@ def extract_eeg_features(
     epochs.pick(picks="eeg")
     info = epochs.info
     paradigm = info["description"]
-    site = info["experimenter"]
 
     assert subject_id == info["subject_info"]["first_name"], \
         f"Subject ID mismatch ({subject_id} != {info['subject_info']['first_name']}) between preprocess and processing sections."
@@ -48,12 +46,12 @@ def extract_eeg_features(
     ## get values from config file
     if config_file is None:
         yaml_file = os.path.join(os.path.dirname(__file__), 'features-config.yaml')
-        config = load_config(site, yaml_file)
+        config = load_config("general", yaml_file)
     else:
-        config = load_config(site, config_file)
+        config = load_config("general", config_file)
     
     config.update(kwargs)
-    sensor_space_features = config.get("sensor_space_features", ["pow_freq_bands", "spect_entropy"])
+    sensor_space_features = config.get("sensor_space_features", None)
     source_space_power = config.get("source_space_power", True)
     sensor_space_connectivity = config.get("sensor_space_connectivity", True)
     source_space_connectivity = config.get("source_space_connectivity", True)
@@ -90,14 +88,6 @@ def extract_eeg_features(
                                 )
     logging.info(f"Feature extraction script initiated on subject {subject_id}, {paradigm} paradigm.")
     set_log_level(verbose=verbose)
-    ## 
-
-    # progress = tqdm(total=len(features),
-    #                 desc="",
-    #                 ncols=50,
-    #                 colour="cyan",
-    #                 bar_format='{l_bar}{bar}'
-    #                 )
     
     if ep_fname.stem[-2:] == "eo": eye_label = "open"
     if ep_fname.stem[-2:] == "ec": eye_label = "close"
@@ -111,7 +101,7 @@ def extract_eeg_features(
             "return_as_df": False
             }
     
-    dfs = []
+    logging.info(f"{sensor_space_features} are selected to be extracted from epochs in sensor level.")
     for feature in sensor_space_features: 
         match feature:
             case "pow_freq_bands":
@@ -124,12 +114,10 @@ def extract_eeg_features(
                                 funcs_params=funcs_params,
                                 **kwargs
                                 )
-                print(y.shape)
-                # y = y.reshape(len(epochs), len(ch_names), len(freq_bands.keys()))
                 columns = [f"power_ch_{j}_freq_{k}" for j in ch_names for k in freq_bands]
                 df = pd.DataFrame(y, columns=columns)
-                print(df.shape)
-                dfs.append(df)
+                logging.info(f"{feature} is computed per epoch, the data shape is {df.shape}")
+                add_and_save_df(df, feature, subject_id, subject_dir, paradigm, info, eye_label)
 
             case "spect_slope":
                 funcs_params = {
@@ -147,7 +135,8 @@ def extract_eeg_features(
                 columns_2 = [f"slope_ch_{j}" for j in ch_names]
                 columns = columns_1 + columns_2
                 df = pd.DataFrame(y, columns=columns)
-                dfs.append(df)
+                logging.info(f"{feature} is computed per epoch, the data shape is {df.shape}")
+                add_and_save_df(df, feature, subject_id, subject_dir, paradigm, info, eye_label)
 
             case "hjorth_complexity_spect" | "hjorth_mobility_spect":
                 funcs_params = {
@@ -160,7 +149,8 @@ def extract_eeg_features(
                                 )
                 columns = [f"{feature}_ch_{j}" for j in ch_names]
                 df = pd.DataFrame(y, columns=columns)
-                dfs.append(df)
+                logging.info(f"{feature} is computed per epoch, the data shape is {df.shape}")
+                add_and_save_df(df, feature, subject_id, subject_dir, paradigm, info, eye_label)
 
             case "hurst_exp" | "app_entropy" | "samp_entropy" | "decorr_time" | "hjorth_mobility" | "hjorth_complexity" | "higuchi_fd" | "katz_fd" | "spect_entropy" | "svd_entropy" | "svd_fisher_info":
                 y = extract_features(selected_funcs=[feature],
@@ -169,12 +159,15 @@ def extract_eeg_features(
                                 )
                 columns = [f"{feature}_ch_{j}" for j in ch_names]
                 df = pd.DataFrame(y, columns=columns)
-                dfs.append(df)
+                logging.info(f"{feature} is computed per epoch, the data shape is {df.shape}")
+                add_and_save_df(df, feature, subject_id, subject_dir, paradigm, info, eye_label)
                 
     
     ## add source stuff here
+    label_ts_computed = False
     if source_space_power:
         inv = read_inverse_operator(fname=subject_dir / "inv" / f"{paradigm}-inv.fif")
+        logging.info(f"Inverse operator found for the subject and loaded to the memory.")
         
         if subjects_fs_dir is None:
             if atlas == "aparc":
@@ -183,7 +176,8 @@ def extract_eeg_features(
                 labels = read_labels_from_annot(subject="fsaverage", subjects_dir=None, parc=atlas)[:-2]
         else:
             labels = read_labels_from_annot(subject=subject_id, subjects_dir=subjects_fs_dir, parc=atlas)
-
+        
+        logging.info(f"Brain labels are extracted from source space data.")
         stcs = apply_inverse_epochs(
                                     epochs,
                                     inverse_operator=inv,
@@ -193,6 +187,8 @@ def extract_eeg_features(
                                     pick_ori="normal",
                                     return_generator=False
                                     )
+        logging.info(f"Inverse operator is applied to each single epoch.")
+
         label_ts = extract_label_time_course(
                                             stcs,
                                             labels,
@@ -201,6 +197,8 @@ def extract_eeg_features(
                                             return_generator=False,
                                             )
         label_ts = np.array(label_ts)
+        label_ts_computed = True
+        logging.info(f"Label time courses are extracted per brain label, the shape of the extracted array is {label_ts.shape}.")
         n_epochs, n_channels, n_times = label_ts.shape
         reshaped_data = label_ts.reshape(-1, n_times)
         freqs, psd = welch(reshaped_data, info["sfreq"], axis=-1, nperseg=min(256, n_times))
@@ -216,8 +214,8 @@ def extract_eeg_features(
 
         labels_power = np.concatenate(labels_power, axis=1)
         df = pd.DataFrame(labels_power, columns=columns)
-        print(df.shape)
-        dfs.append(df)
+        logging.info(f"Power values are computed per epoch in the {list(freq_bands.keys())} frequency bands in the all brain labels.")
+        add_and_save_df(df, "source_space_power", subject_id, subject_dir, paradigm, info, eye_label)
 
     ## connectivity stuff
     if sensor_space_connectivity:
@@ -252,29 +250,64 @@ def extract_eeg_features(
         
         freq_cons = np.concatenate(freq_cons, axis=-1)
         df = pd.DataFrame(freq_cons, columns=columns)
-        print(df.shape)
-        dfs.append(df)
+        logging.info(f"Connectivity values are computed per epoch in the {list(freq_bands.keys())} frequency bands in all EEG channels.")
+        add_and_save_df(df, "sensor_space_connectivity", subject_id, subject_dir, paradigm, info, eye_label)
     
     if source_space_connectivity:
-        raise NotImplementedError
+        if label_ts_computed:
+            lb_names = [lb.name for lb in labels]
+            i_lower, j_lower = np.tril_indices_from(np.zeros(shape=(label_ts.shape[1], label_ts.shape[1])), k=-1)
+            columns = []
+            freq_cons = []
+            for key, value in freq_bands.items(): 
+                con = spectral_connectivity_time(
+                                                label_ts,
+                                                freqs=np.arange(value[0], value[1], 5),
+                                                method=connectivity_method,
+                                                average=False,
+                                                sfreq=info["sfreq"],
+                                                mode="cwt_morlet",
+                                                fmin=value[0],
+                                                fmax=value[1],
+                                                faverage=True,
+                                                n_cycles=value[1] / 6
+                                                )
+                con_matrix = np.squeeze(con.get_data(output="dense")) # n_epochs * n_chs * n_chs
 
-    # if graph_learning:
-    #    raise NotImplementedError
+                cons = []
+                for ep_con in con_matrix:
+                    ep_con_value = ep_con[i_lower, j_lower]
+                    cons.append(ep_con_value)
+                cons = np.array(cons)
+                freq_cons.append(cons)
 
-    ## finalize df and save
-    df = pd.concat(dfs, axis=1)
+                con_labels = [f"{lb_names[i]}_vs_{lb_names[j]}_{key}" for i, j in zip(i_lower, j_lower)]
+                columns += con_labels
+            
+            freq_cons = np.concatenate(freq_cons, axis=-1)
+            df = pd.DataFrame(freq_cons, columns=columns)
+            logging.info(f"Connectivity values are computed per epoch in the {list(freq_bands.keys())} frequency bands in the all brain labels.")
+            add_and_save_df(df, "source_space_connectivity", subject_id, subject_dir, paradigm, info, eye_label)
+        
+        else:
+            raise ValueError("set source_space_power=True to avoid double computation of source estimate values.")
+
+    logging.info(f"Feature extraction finished without an error!")
+
+def add_and_save_df(df, feature, subject_id, subject_dir, paradigm, info, eye_label):
     df["eyes"] = eye_label
     df["site"] = info["experimenter"] 
     df["subject_id"] = subject_id
-    df.to_csv(subject_dir / "features" / f"features_{paradigm}.csv")
+    csv_fname = subject_dir / "features" / f"features_{feature}_{paradigm}.csv"
+    zip_fname = subject_dir / "features" / f"features_{feature}_{paradigm}.zip"
+    df.T.to_csv(csv_fname)
 
-    return df
+    with zipfile.ZipFile(zip_fname, "w", zipfile.ZIP_DEFLATED) as zipf:
+        zipf.write(csv_fname, os.path.basename(csv_fname))
 
+    os.remove(csv_fname)
 
-
-
-
-def get_full_features_list():
+def get_full_sensor_features_list():
     full_list = ["pow_freq_bands", "spect_slope", "hjorth_complexity_spect",
                 "hjorth_mobility_spect", "hurst_exp", "app_entropy",
                 "samp_entropy", "decorr_time", "hjorth_mobility",

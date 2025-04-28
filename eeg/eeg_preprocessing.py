@@ -227,6 +227,10 @@ def preprocess(
     raw.info["experimenter"] = site
     raw.info["subject_info"] = {"first_name": subject_id}
     raw.info["description"] = paradigm
+
+    ## if paradigm gpias , we need to extract trig times from audio and save in annotation
+    if paradigm in ["gpias", "dublin"]:
+        annotate_trigger_times(raw)
     
     orig_fname = subject_dir / "orig" / f"raw_{paradigm}.fif" 
     if orig_fname.exists():
@@ -426,3 +430,17 @@ def preprocess(
     progress.update(1)
     progress.close()
     logging.info(f"Preprocessing finished without an error.")
+
+
+
+def annotate_trigger_times(raw):
+    site = raw.info["experimenter"]
+    paradigm = raw.info["description"]
+
+    if paradigm == "gpias":
+        match site:
+            case "Zuerich":
+                pass
+
+
+    # if paradigm == "gpias":
