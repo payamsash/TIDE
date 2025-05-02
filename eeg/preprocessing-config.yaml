@@ -37,9 +37,9 @@ Ghent:
 Illinois:
   psd_check: true
   manual_data_scroll: true
-  run_ica: true
+  run_ica: false
   manual_ica_removal: false
-  ssp_eog: false
+  ssp_eog: true
   ssp_ecg: false
   create_report: true
 

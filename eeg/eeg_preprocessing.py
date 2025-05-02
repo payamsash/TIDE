@@ -3,29 +3,39 @@
 
 import os
 from pathlib import Path
-from tqdm import tqdm
 import time
 from warnings import warn
+import numpy as np
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
 
-from mne import set_log_level, Report, concatenate_raws
 from mne_icalabel import label_components
 from mne_icalabel.gui import label_ica_components
-from mne.io import read_raw
+from mne.io import read_raw, RawArray, read_raw_ant
 from mne.channels import read_dig_captrak, make_standard_montage
 from mne.viz import plot_projs_joint
-from .tools import (load_config,
-                    initiate_logging,
-                    _check_preprocessing_inputs,
-                    create_subject_dir,
-                    read_vhdr_input_fname
-                    )
+from mne import (set_log_level,
+                        Report,
+                        concatenate_raws,
+                        events_from_annotations,
+                        create_info,
+                        find_events,
+                        annotations_from_events,
+                        read_trans
+                        )
 from mne.preprocessing import (ICA,
                                 create_eog_epochs,
                                 create_ecg_epochs,
                                 compute_proj_ecg,
                                 compute_proj_eog
                                 )
+from .tools import (load_config,
+                    initiate_logging,
+                    _check_preprocessing_inputs,
+                    create_subject_dir,
+                    read_vhdr_input_fname, 
+                    gpias_constants
+                    )
 
 def preprocess(
         fname,
@@ -54,7 +64,7 @@ def preprocess(
         site : str
             The recording site; must be one of the following: ['Austin', 'Dublin', 'Ghent', 'Illinois', 'Regensburg', 'Tuebingen']
         paradigm : str
-            Name of the EEG paradigm. Name of the EEG paradigm, must be one of the: ['rest', 'rest_v1', 'rest_v2', 'gpias', 'xxxxx', 'xxxxy', 'omi', 'regularity']
+            Name of the EEG paradigm. Name of the EEG paradigm, must be one of the: ['gpias', 'xxxxx', 'xxxxy', 'omi'] or should start with 'rest'.
         config_file: str | Path
             Path to the .yaml config file. If None, the default 'pre-processing-config.yaml' will be used.
         overwrite :  str
@@ -132,67 +142,98 @@ def preprocess(
                                 config,
                                 analysis_type="preprocessing"
                                 )
-
     if created:
         logging.info("preprocessing script initiated and subject directory has been created.")
     else:
         logging.info("preprocessing script initiated. Subject directory was already created.")
-
     set_log_level(verbose=verbose)
-    progress = tqdm(total=5,
-                    desc="",
-                    ncols=50,
-                    colour="cyan",
-                    bar_format='{l_bar}{bar}'
-                    )
     
     ## finding files
     time.sleep(1)
-    tqdm.write("Finding and reading raw EEG data ...\n")
-    progress.update(1)
+    print("Finding and reading raw EEG data ...\n")
 
     fname = Path(fname)
     suffix = fname.suffix
     fnames = []
-    if fname.stem.endswith(("_1", "-1")):
+    if fname.stem.endswith(("_1", "-1", "1")):
+        fname_3 = Path("._.")
         i = 1
         while True:
-            fname_1 = Path(f"{fname.stem[:-2]}_{i}{suffix}")
-            fname_2 = Path(f"{fname.stem[:-2]}-{i}{suffix}")
-            if not any([fname_1.exists(), fname_2.exists()]):
+            fname_1 = Path(fname.parent / f"{fname.stem[:-2]}_{i}{suffix}")
+            fname_2 = Path(fname.parent / f"{fname.stem[:-2]}-{i}{suffix}")
+            if fname.stem[-2] not in ["-", "_"]:
+                fname_3 = Path(fname.parent / f"{fname.stem[:-1]}{i}{suffix}")
+            if not any([fname_1.exists(), fname_2.exists(), fname_3.exists()]):
                 break
             if fname_1.exists(): fnames.append(fname_1)
             if fname_2.exists(): fnames.append(fname_2)
+            if fname_3.exists(): fnames.append(fname_3)
             i += 1
     else:
         fnames = [fname]
     logging.info(f"Following EEG files are selected to be read: {[str(p) for p in fnames]}")
-
+    
     ## reading files
     match suffix:
+        case ".cnt":
+            raw = concatenate_raws([read_raw_ant(fname) for fname in fnames])
+            montage = make_standard_montage("easycap-M1")
+            raw.drop_channels(['M1', 'M2', 'PO5', 'PO6'])
+            ch_types = {"EOG": "eog"}
+            raw.set_channel_types(ch_types)
+            raw.annotations.delete(idx=-1) ## lets check gpias if it works
+
         case ".mff":
             raw = concatenate_raws([read_raw(fname) for fname in fnames])
             raw.drop_channels(ch_names="VREF")
             montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
         case ".bdf":
-            raw = concatenate_raws([read_raw(fname) for fname in fnames])
+            raw = concatenate_raws([read_raw(fname, exclude=("EXG")) for fname in fnames])
             raw.pick(["eeg", "stim"])
             montage = make_standard_montage("easycap-M1")
 
         case ".cdt":
-            fnames = [fname.with_suffix(".dpa") for fname in fnames]
-            raw = concatenate_raws([read_raw(fname) for fname in fnames])
+            for fname in fnames:
+                dpo_file = fname.with_suffix('.cdt.dpo')
+                dpa_file = fname.with_suffix('.cdt.dpa')
+                if dpo_file.exists():
+                    dpo_file.rename(dpa_file)
 
-        case ".ds":
             raw = concatenate_raws([read_raw(fname) for fname in fnames])
-            raw.pick(["eeg", "stim"])
+            ch_types = {"VEOG": "eog",
+                        "HEOG": "eog",
+                        "Trigger": "stim"}
+            raw.set_channel_types(ch_types)
+            montage = make_standard_montage("easycap-M1")
+            raw.drop_channels(["F11", "F12", "FT11", "FT12", "M1", "M2", "Cb1", "Cb2"])
+            eog_chs_1 = ["VEOG"]
+            eog_chs_2 = ["F7", "F8"]
+
+            transform = read_trans("./eeg/Illinois-trans.fif")
+            raw.info["dev_head_t"] = transform
+            raw.pick(["eeg", "eog", "stim"])
+
+        # case ".ds":
+        #     raw = concatenate_raws([read_raw(fname) for fname in fnames])
+        #     raw.pick(["eeg", "stim"])
 
         case ".vhdr":   
-            if site == "Regensburg":
-                raw = concatenate_raws([read_vhdr_input_fname(fname) for fname in fnames])
-                raw.pick(["eeg", "stim"]) 
+            if site in ["Regensburg", "Tuebingen"]:
+                if len(fnames) == 1: # probably rest
+                    raw = read_vhdr_input_fname(fnames[0])
+                else:
+                    raws = []
+                    for f_idx, fname in enumerate(fnames):
+                        raw = read_vhdr_input_fname(fname)
+                        raw.annotations.append(onset=0, duration=0, description=f_idx+1)
+                        raws.append(raw)
+                
+                    raw = concatenate_raws(raws)
                 montage = make_standard_montage("easycap-M1")
+                ch_types = {"audio": "stim"}
+                raw.set_channel_types(ch_types)
+                raw.pick(["eeg", "stim"])
 
             if site == "Zuerich":
                 captrak_dir = Path(fname).parent / "captrack"
@@ -214,6 +255,9 @@ def preprocess(
                 raw = read_vhdr_input_fname(Path(fname))
                 raw.set_channel_types(ch_types)
                 raw.pick(["eeg", "eog", "ecg", "stim"])
+                eog_chs_1 = ["PO7", "PO8"]
+                eog_chs_2 = ["O1", "O2"]
+
     
     ## now the real part
     raw.load_data()
@@ -227,10 +271,6 @@ def preprocess(
     raw.info["experimenter"] = site
     raw.info["subject_info"] = {"first_name": subject_id}
     raw.info["description"] = paradigm
-
-    ## if paradigm gpias , we need to extract trig times from audio and save in annotation
-    if paradigm in ["gpias", "dublin"]:
-        annotate_trigger_times(raw)
     
     orig_fname = subject_dir / "orig" / f"raw_{paradigm}.fif" 
     if orig_fname.exists():
@@ -238,13 +278,23 @@ def preprocess(
             warn(f"The preprocessed raw {orig_fname} already exist.")
         if overwrite == "raise":
             raise FileExistsError(f"The preprocessed raw {orig_fname} already exist.")
-        
+    
     raw.save(orig_fname, overwrite=True)
     logging.info(f"Raw EEG recording saved in the {str(subject_id)} directory")
-
+        
+    ## if paradigm gpias, we need to extract trig times from audio and save in annotation
+    if paradigm == "gpias":
+        if site in ["Zuerich", "Regensburg", "Dublin", "Tuebingen"]:
+            events_dict, default_thrs, distance = gpias_constants()
+            raw = create_stim_channel_from_audio(raw,
+                                                subject_dir,
+                                                events_dict,
+                                                default_thrs,
+                                                distance,
+                                                logging)
+        
     ## resampling, filtering and re-referencing 
-    tqdm.write("Resampling, filtering and re-referencing ...\n")
-    progress.update(1)
+    print("Resampling, filtering and re-referencing ...\n")
     raw.resample(sfreq=250, stim_picks=None)
     logging.info(f"Raw EEG resampled to 250 Hz.")
 
@@ -285,12 +335,10 @@ def preprocess(
     else:
         logging.info(f"No bad channel was selected for interpolation.")
     
-    
     ## ICA
     show = False
     if run_ica:
-        tqdm.write("Running ICA ...\n")
-        progress.update(1)
+        print("Running ICA ...\n")
         ica = ICA(n_components=0.95, max_iter=800, method='infomax', fit_params=dict(extended=True))
         try:
             ica.fit(raw)
@@ -315,12 +363,11 @@ def preprocess(
                                                 show=show,
                                                 )
             eog_indices_fil = [x for x in eog_indices if x <= 10]
-        ica.apply(raw, exclude=eog_indices_fil)
-        logging.info(f"ICA analysis was performed and {len(eog_indices_fil)} eye related components were dropped.")
+            ica.apply(raw, exclude=eog_indices_fil)
+            logging.info(f"ICA analysis was performed and {len(eog_indices_fil)} eye related components were dropped.")
     
     if ssp_ecg:
-        tqdm.write("Finding and removing ECG related components...\n")
-        progress.update(1)
+        print("Finding and removing ECG related components...\n")
         
         ## find R peaks
         ev_pulse = create_ecg_epochs(raw,
@@ -336,20 +383,20 @@ def preprocess(
         logging.info(f"ECG projection was computed and applied to data.")
 
     if ssp_eog:
-        tqdm.write("Finding and removing vertical and horizontal EOG components...\n")
-        progress.update(1)
-
+        print("Finding and removing vertical and horizontal EOG components...\n")
+        
         ## vertical
-        ev_eog = create_eog_epochs(raw, ch_name=["PO7", "PO8"]).average(picks="all")
+        ev_eog = create_eog_epochs(raw, ch_name=eog_chs_1).average(picks="all")
         ev_eog.apply_baseline((None, None))
         veog_projs, _ = compute_proj_eog(raw, n_eeg=2, reject=None)
         raw.add_proj(veog_projs)
         logging.info(f"Vertical EOG projection was computed and applied to data.")
 
+        
         ## horizontal
         ica = ICA(n_components=0.97, max_iter=800, method='infomax', fit_params=dict(extended=True))        
         ica.fit(raw)
-        eog_indices, eog_scores = ica.find_bads_eog(raw, ch_name=["O1", "O2"], threshold=2)
+        eog_indices, eog_scores = ica.find_bads_eog(raw, ch_name=eog_chs_2, threshold=1.2)
         eog_indices_fil = [x for x in eog_indices if x <= 10]
         heog_idxs = [eog_idx for eog_idx in eog_indices_fil if eog_scores[0][eog_idx] * eog_scores[1][eog_idx] < 0]
         fig_scores = ica.plot_scores(scores=eog_scores, exclude=eog_indices_fil, show=show)
@@ -361,12 +408,10 @@ def preprocess(
                                                     )
         ica.apply(raw, exclude=heog_idxs)
         logging.info(f"Horizontal EOG component ffrom ICA was detected and dropped from data.")
-
     raw.apply_proj()
 
     # creating and saving report
-    tqdm.write("Creating report and saving...\n")
-    progress.update(1)
+    print("Creating report and saving...\n")
     if create_report:
         logging.info(f"Report file initiated.")
         report = Report(title=f"report_subject_{subject_id}")
@@ -374,7 +419,7 @@ def preprocess(
         logging.info(f"General information was added to report.")
 
         if run_ica:
-            if len(eog_indices_fil) > 0:
+            if len(eog_indices) > 0:
                 report.add_figure(fig=eog_components, title="EOG Components", image_format="PNG")
                 logging.info(f"EOG components from ICA were added to report.")
         
@@ -426,21 +471,190 @@ def preprocess(
         report.save(fname=subject_dir / "reports" / f"{paradigm}.h5", open_browser=False, overwrite=True)
         logging.info(f"Report was saved in {subject_id} directory.")
         
-    tqdm.write("\033[32mEEG data were preprocessed sucessfully!\n")
-    progress.update(1)
-    progress.close()
+    print("\033[32mEEG data were preprocessed sucessfully!\n")
     logging.info(f"Preprocessing finished without an error.")
 
 
 
-def annotate_trigger_times(raw):
+def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, distance, logging):
+    
     site = raw.info["experimenter"]
-    paradigm = raw.info["description"]
+    order = ["pre", "bbn", "3kHz", "8kHz", "post"]
+    
+    if site == "Dublin":
+        events = find_events(raw, initial_event=True)
+        split_indices = np.where(events[:, 2] == 65536)[0]
+        if len(split_indices) == 5:
+            logging.info(f"Five blocks of {order} are detected.")
 
-    if paradigm == "gpias":
-        match site:
-            case "Zuerich":
-                pass
+        for idx, (i, blck) in enumerate(zip(split_indices, order)):
+            if not idx == len(split_indices) - 1:
+                sub_evs = events[i:split_indices[idx+1]]
+            else:
+                sub_evs = events[i:]
+            
+            if blck in ["pre", "post"]:
+                mapping = dict(zip([2, 6, 7, 10, 11], [f'PO70_{blck}', f'PO75_{blck}', f'PO80_{blck}', f'PO85_{blck}', f'PO90_{blck}'])) 
+            if blck in ["bbn", "3kHz", "8kHz"]:
+                mapping = dict(zip([5, 1, 3], [f'PO_{blck}', f'GO_{blck}', f'GP_{blck}']))
+    
+            annot_from_events = annotations_from_events(    
+                                                        sub_evs[1:],
+                                                        sfreq=raw.info["sfreq"],
+                                                        event_desc=mapping,
+                                                        orig_time=raw.info["meas_date"]
+                                                        )
+            raw.set_annotations(raw.annotations + annot_from_events)
 
+        return raw
 
-    # if paradigm == "gpias":
+    events_orig = events_from_annotations(raw)[0]
+    if site == "Zuerich":
+        data = raw.get_data(picks="Audio")[0]
+        key_dict = {0: "init", 1: "pre", 2: "bbn", 3: "3kHz", 4: "8kHz", 5: "post"}
+        split_indices = events_orig[np.isin(events_orig[:, 2], [1, 2, 3, 4, 5])]
+        scale = 1
+        x_thr = 100
+
+    if site == "Regensburg":
+        data = raw.get_data(picks="audio")[0]
+        key_dict = {10000: "init", 10001: "pre", 10002: "bbn", 10003: "3kHz", 10004: "8kHz", 10005: "post"}
+        split_indices = events_orig[np.isin(events_orig[:, 2], [10001, 10002, 10003, 10004, 10005])]
+        scale = 1e-5
+        x_thr = 0.001
+    if site == "Tuebingen":
+        data = raw.get_data(picks="audio")[0]
+        key_dict = {10000: "init", 10001: "pre", 10002: "bbn", 10003: "3kHz", 10004: "8kHz", 10005: "post"}
+        split_indices = events_orig[np.isin(events_orig[:, 2], [10001, 10002, 10003, 10004, 10005])]
+        scale = 1e-5
+        x_thr = 0.01
+
+    segments = np.split(data, split_indices[:, 0])
+    blocks =[key_dict[i] for i in split_indices[:, 2]]
+    blocks_dict = dict(zip(["init"] + blocks, segments))
+    logging.info(f"Five blocks of {order} are detected.")
+
+    ## get stim levels
+    fig, axs = plt.subplots(1, 5, figsize=(17, 3.5), layout="tight")
+    lines = []
+    for key in blocks_dict:
+        if key == "init": 
+            continue
+        
+        ## get the peaks
+        peaks, _ = find_peaks(blocks_dict[key], height=100*scale, distance=100, prominence=100*scale)
+        peak_count, bin_edges = np.histogram(blocks_dict[key][peaks], bins=50)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        idx = order.index(key)
+        axs[idx].bar(bin_centers, peak_count, width=np.diff(bin_edges), color="lightsteelblue", align='center', edgecolor='black')
+        axs[idx].set_ylim(0, max(peak_count) + 5)
+        axs[idx].set_title(f"{key}", fontstyle="italic")
+        axs[idx].spines[["right", "top"]].set_visible(False)
+
+        ## thrsholds
+        init_thrs = list(default_thrs[site].values())
+        thrs = init_thrs[idx]
+        colors = ['red', 'green', 'blue', 'magenta']
+        for thresh, col in zip(thrs, colors):
+            line = axs[idx].axvline(thresh, color=col, linestyle='--', linewidth=2)
+            lines.append(line)
+        
+        draggers = [DraggableVLine(line, x_thr) for line in lines]
+        def on_close(event):
+            final_positions = [line.get_xdata()[0] for line in lines]
+            np.save(subject_dir / "thrs.npy", np.array(final_positions))
+        fig.canvas.mpl_connect('close_event', on_close)
+    plt.show(block=True)
+
+    thrs = np.load(subject_dir / "thrs.npy", allow_pickle=True)
+    height_limits = {
+                    "PO70": [thrs[0] * 0.5, thrs[0]],
+                    "PO75": [thrs[0], thrs[1]],
+                    "PO80": [thrs[1], thrs[2]],
+                    "PO85": [thrs[2], thrs[3]],
+                    "PO90": [thrs[3], thrs[3] * 2],
+                    "GO": [thrs[4] * 0.5, thrs[4]],
+                    "GP": [thrs[5], thrs[6]],
+                    "PO": [thrs[6], thrs[6] * 2],
+                    }
+    logging.info(f"Threshold values are selected to distinguish events as following: {height_limits}")
+    
+    ## get triggers from blocks
+    for main_key, signal in blocks_dict.items():
+        categorized = np.zeros_like(signal, dtype=int)
+        if  main_key in ["pre", "post"]:
+            for sub_key in list(height_limits.keys())[:5]:
+                height = height_limits[sub_key]
+                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance)
+                categorized[peaks] = events_dict[main_key][sub_key]
+                if not len(peaks) == 25:
+                    raise ValueError(f"number of events for event id {sub_key} must be 25, got {len(peaks)} instead.")
+                logging.info(f"{len(peaks)} {sub_key} events found in {main_key} part.")
+
+        if main_key in ["bbn", "3kHz", "8kHz"]:
+            for sub_key in list(height_limits.keys())[5:]:
+                height = height_limits[sub_key]
+                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance)
+                categorized[peaks] = events_dict[main_key][sub_key]
+                if not (len(peaks) == 100 or len(peaks) == 50): # must fix with correct vals
+                    raise ValueError(f"number of events for event id {sub_key} in {main_key} part must be 100, got {len(peaks)} instead.")
+                logging.info(f"{len(peaks)} {sub_key} events found in {main_key} part.")
+        
+        if main_key == "init":
+            pass
+
+        blocks_dict[main_key] = categorized
+    
+    ## make them stim channel
+    stim_data = np.concatenate(list(blocks_dict.values()))
+    info = create_info(["STI1"], raw.info['sfreq'], ['stim'])
+    stim_raw = RawArray(stim_data[np.newaxis,], info)
+    raw.add_channels([stim_raw], force_update_info=True)
+    events = find_events(raw, stim_channel="STI1", output="onset", min_duration=0, shortest_event=1)
+    mapping = {value: f"{sub_key}_{key}"
+                for key, subdict in events_dict.items()
+                for sub_key, value in subdict.items()
+                } 
+    annot_from_events = annotations_from_events(events,
+                                                sfreq=raw.info["sfreq"],
+                                                event_desc=mapping,
+                                                orig_time=raw.info["meas_date"]
+                                                )
+    raw.set_annotations(annot_from_events)
+    raw.drop_channels(ch_names="STI1")
+    os.remove(subject_dir / "thrs.npy")
+    logging.info(f"Events are created and saved as annotation in raw data.")
+
+    return raw
+
+class DraggableVLine:
+    def __init__(self, line, x_thr):
+        self.line = line
+        self.x_thr = x_thr
+        self.press = False
+        self.cid_press   = line.figure.canvas.mpl_connect('button_press_event',   self.on_press)
+        self.cid_release = line.figure.canvas.mpl_connect('button_release_event', self.on_release)
+        self.cid_motion  = line.figure.canvas.mpl_connect('motion_notify_event',  self.on_motion)
+
+    def on_press(self, event):
+        if event.inaxes != self.line.axes:
+            return
+        x0 = self.line.get_xdata()[0]
+        if abs(event.xdata - x0) < self.x_thr:
+            self.press = True
+
+    def on_motion(self, event):
+        if not self.press or event.inaxes != self.line.axes:
+            return
+        self.line.set_xdata([event.xdata, event.xdata])
+        self.line.figure.canvas.draw_idle()
+
+    def on_release(self, event):
+        self.press = False
+
+## add here a function to detect which session of gpias we are looking at (50050 was wrong)
+## check if file reading is correct for _, - and number
+## ask and add omi, xxxxx and xxxxy events
+## now lets ee other sites (rest)
+## fix error types
+## add extra options for each site resting data
