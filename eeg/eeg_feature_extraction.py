@@ -28,20 +28,58 @@ def extract_eeg_features(
         verbose="ERROR",
         **kwargs
         ):
+    """ Preprocessing of the raw eeg recordings.
+        The process could be fully or semi automatic based on user choice.
+
+        Parameters
+        ----------
+        subject_id : str
+            The subject name, if subject has MRI data as well, should be FreeSurfer subject name, 
+            then data from both modality can be analyzed at once.
+        subjects_dir : path-like | None
+            The path to the directory containing the EEG subjects. 
+        config_file: str | Path
+            Path to the .yaml config file. If None, the default 'pre-processing-config.yaml' will be used.
+        sensor_space_features : list
+            List of the features you want to extract per epoch, you can see the full list of features name by running get_full_sensor_features_list()
+        source_space_power : bool
+            If True, power in brain labels will be computed.
+        sensor_space_connectivity : bool
+            If True, connectivity features between EEG channels will be computed.
+        source_space_connectivity : bool
+            If True, connectivity features between brain labels will be computed.
+        connectivity_method : str
+            Method to compute connectivity, possible options are: ['coh', 'cohy', 'imcoh', 'cacoh', 'mic', 'mim', 'plv', 'ciplv', 'ppc', 'pli', 'dpli', 'wpli', 'wpli2_debiased', 'gc', 'gc_tr']
+        subjects_fs_dir : str | None
+            If None, default fsaverage will be used, otherwise it should be the path to subjects_dir in FS.
+        atlas : str
+            The parcellation to use, e.g., 'aparc' or 'aparc.a2009s'.
+        freq_bands : dict
+            Frequency bands of interest.
+        overwrite :  str
+            must be one of the ['ignore', 'warn', 'raise'].
+        verbose : bool | str | int | None
+            Control verbosity of the logging output. If None, use the default verbosity level.
+        
+        Notes
+        -----
+        .. This script is mainly designed for Antinomics / TIDE projects, however could be 
+            used for other purposes.
+        """
     
     ## get site and paradigm
     if not isinstance(subject_id, str): raise TypeError(f"subject_id must be str, got type {type(subject_id).__name} instead.")
     if not isinstance(subjects_dir, (str, Path)): raise TypeError(f"subjects_dir must be str or Path object, got type {type(subjects_dir).__name} instead.")
     subject_dir = Path(subjects_dir) / subject_id
-    ep_fname = subject_dir / "epochs" / f"epochs-rest-eo.fif"
+    paradigm = info["description"]
+    ep_fname = subject_dir / "epochs" / f"epochs-{paradigm}-eo.fif"
     epochs = read_epochs(ep_fname, preload=True)
     epochs.pick(picks="eeg")
     info = epochs.info
-    paradigm = info["description"]
-
+    
     assert subject_id == info["subject_info"]["first_name"], \
         f"Subject ID mismatch ({subject_id} != {info['subject_info']['first_name']}) between preprocess and processing sections."
-    assert paradigm == "rest", f"paradigm mismatch: {paradigm} != {info['description']}"
+    assert paradigm.startswith("rest"), f"paradigm mismatch: {paradigm} != {info['description']}"
     
     ## get values from config file
     if config_file is None:
@@ -290,7 +328,7 @@ def extract_eeg_features(
             add_and_save_df(df, "source_space_connectivity", subject_id, subject_dir, paradigm, info, eye_label)
         
         else:
-            raise ValueError("set source_space_power=True to avoid double computation of source estimate values.")
+            raise RuntimeError("set source_space_power=True to avoid double computation of source estimate values.")
 
     logging.info(f"Feature extraction finished without an error!")
 

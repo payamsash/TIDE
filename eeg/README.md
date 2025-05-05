@@ -71,10 +71,32 @@ python preprocess.py --help
 ## Usage
 **Preprocessing**
 
-The default options to run the preprocessing script per each site is written in the `preprocessing-config.yaml`, it is advised to have a look at your PSD plot and see if there is a channel which has different trend than others, (you can see the name of the channels by simply clicking on the plot), remember this channel(s) and check them in the plot window (`manual_scroll_data=True`). In case you decided to mark the channel as bad channel, just click on the signal and it will be marked as bad and later be interpolated automatically.
+The default preprocessing options for each site are specified in the `preprocessing-config.yaml` file. Before proceeding, it's recommended to inspect the Power Spectral Density (PSD) plot to identify any channels that exhibit unusual patterns compared to others. You can view channel names by clicking on the plot. Take note of any suspicious channels and examine them further using the scrollable plot view (`manual_scroll_data=True`). If you decide a channel is bad, simply click on its signal—it will be marked as bad and automatically interpolated during preprocessing. The script will create a folder for each subject within the subjects_dir directory and save the following files: the original raw data (in `fif` format), the preprocessed data, logs, and reports.
 
-** In the case of `paradigm='gpias'`, a plot with five subplots representing pre, bbn, 3kHz, 8kHz and post. you can manually drag the vertical dashed lines to separate the histograms, the histograms
-  
+For GPIAS paradigm:
+
+-   EEG files must be ordered as follows: `["pre", "bbn", "3kHz", "8kHz", "post"]`.
+-   Each file should end with one of these suffixes: `["1", "_1", "-1"]`.
+For example, you should rename the files as: `gpias_1.bdf`, `gpias_2.bdf`, `...`, `gpias_5.bdf`.
+
+-   A plot displaying five subplots—each corresponding to one of the five blocks—will appear. You can manually adjust the vertical dashed lines to separate the histograms. Once satisfied, close the window. It’s best to position the lines near the leftmost bars (indicating lower values).
+
+For resting-state paradigm:
+
+-   Consider using more descriptive names for the paradigm, such as rest_closed, rest_open, or rest_both, to reflect whether the subject had their eyes closed, open, or alternated between the two states during the recording.
+
+**Processing**
+
+The default processing options for each site are defined in the `processing-config.yaml` file. Before running the pipeline, it is recommended to review the epochs plot (`manual_scroll_data=True`) to identify any channels or epochs that show abnormal patterns. You can simply click on an epoch or a channel name to mark it for exclusion. Additionally, three automatic epoch rejection algorithms are available based on user preference: `"ptp", "pyriemann", and "autoreject"`. By default, no automatic rejection is applied unless explicitly specified. If you have a structural MRI scan of the subject, you should provide the corresponding `FreeSurfer` subject directory via the `subjects_fs_dir` argument. After processing, the extracted epochs will be saved in the subject's epochs directory, along with logs and HTML-formatted reports.
+
+**Feature extraction**
+
+You can run this script on your resting-state epochs and select the specific features you wish to extract from the data. To view the full list of available sensor-level features, run the following:
+```
+from eeg_feature_extraction import get_full_sensor_features_list
+get_full_sensor_features_list()
+```
+You can toggle options (True/False) to specify whether to extract source label power, sensor connectivity, or source connectivity features. Additionally, you can choose the method used for connectivity estimation (see `features-config.yaml`).
 
 ## Contact
 The ideal place to ask questions or discuss the contribution process is the [issue tracker](https://github.com/payamsash/Antinomics/issues) on our GitHub repository. If you encounter a bug or have an idea for a new feature, please report it using the issue tracker. To get the most effective support, you can share your data via a Google Drive link, along with a screenshot of your code and the error message you received when running it.

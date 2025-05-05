@@ -94,7 +94,7 @@ def preprocess(
         -----
         .. This script is mainly designed for Antinomics / TIDE projects, however could be 
             used for other purposes.
-        """
+    """
     
     ## get values from config file
     if config_file is None:
@@ -651,10 +651,3 @@ class DraggableVLine:
 
     def on_release(self, event):
         self.press = False
-
-## add here a function to detect which session of gpias we are looking at (50050 was wrong)
-## check if file reading is correct for _, - and number
-## ask and add omi, xxxxx and xxxxy events
-## now lets ee other sites (rest)
-## fix error types
-## add extra options for each site resting data
