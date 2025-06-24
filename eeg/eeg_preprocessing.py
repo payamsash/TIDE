@@ -231,8 +231,12 @@ def preprocess(
                 
                     raw = concatenate_raws(raws)
                 montage = make_standard_montage("easycap-M1")
+                raw.drop_channels(["HRli", "HRre"], on_missing="warn")
                 ch_types = {"audio": "stim"}
-                raw.set_channel_types(ch_types)
+                try:
+                    raw.set_channel_types(ch_types)
+                except: 
+                    print("probably this data is old recording from Regensburg")
                 raw.pick(["eeg", "stim"])
 
             if site == "Zuerich":
@@ -292,7 +296,7 @@ def preprocess(
                                                 default_thrs,
                                                 distance,
                                                 logging)
-        
+            
     ## resampling, filtering and re-referencing 
     print("Resampling, filtering and re-referencing ...\n")
     raw.resample(sfreq=250, stim_picks=None)
@@ -574,7 +578,7 @@ def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, 
                     "PO85": [thrs[2], thrs[3]],
                     "PO90": [thrs[3], thrs[3] * 2],
                     "GO": [thrs[4] * 0.5, thrs[4]],
-                    "GP": [thrs[5], thrs[6]],
+                    "GP": [thrs[4], thrs[6]],
                     "PO": [thrs[6], thrs[6] * 2],
                     }
     logging.info(f"Threshold values are selected to distinguish events as following: {height_limits}")

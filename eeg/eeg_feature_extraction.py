@@ -71,7 +71,7 @@ def extract_eeg_features(
     if not isinstance(subject_id, str): raise TypeError(f"subject_id must be str, got type {type(subject_id).__name} instead.")
     if not isinstance(subjects_dir, (str, Path)): raise TypeError(f"subjects_dir must be str or Path object, got type {type(subjects_dir).__name} instead.")
     subject_dir = Path(subjects_dir) / subject_id
-    paradigm = info["description"]
+    paradigm = "rest" # info["description"] # needs a proper fix later
     ep_fname = subject_dir / "epochs" / f"epochs-{paradigm}-eo.fif"
     epochs = read_epochs(ep_fname, preload=True)
     epochs.pick(picks="eeg")

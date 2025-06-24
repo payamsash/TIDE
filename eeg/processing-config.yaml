@@ -39,7 +39,7 @@ Illinois:
   create_report: true
 
 Regensburg:
-  event_ids: [6, 4]
+  event_ids: [2, 1]
   manual_data_scroll: true
   automatic_epoch_rejection: null
   source_analysis: true

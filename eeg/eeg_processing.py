@@ -239,6 +239,8 @@ def run_rs_processing(raw, event_ids, logging):
     except:
         events = find_events(raw) # probably for dublin
 
+    print(events)
+
     if len(events) == 0:
         logging.info("This recording is only eyes open or eyes closed.")
         both_conditions = False
