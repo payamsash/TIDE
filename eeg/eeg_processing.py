@@ -20,6 +20,7 @@ from mne.datasets import fetch_fsaverage
 from mne.minimum_norm import make_inverse_operator, write_inverse_operator
 from mne import (set_log_level,
                 events_from_annotations,
+                annotations_from_events,
                 find_events,
                 Epochs,
                 concatenate_raws,
@@ -315,6 +316,11 @@ def run_erp_processing(raw, logging):
             baseline = None
         case "omi" | "xxxxx" | "xxxxy":
             baseline = (None, 0)
+
+    if raw.info["experimenter"] == "Austin":
+        events = find_events(raw)
+        event_annots = annotations_from_events(events, raw.info["sfreq"])
+        raw.set_annotations(event_annots)
 
     events, event_ids = events_from_annotations(raw)
     logging.info("Creating epochs...")

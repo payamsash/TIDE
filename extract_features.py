@@ -18,7 +18,7 @@ def main():
     )
     parser.add_argument("subject_id", help="The subject name, if subject has MRI data as well, should be FreeSurfer subject name, then data from both modality can be analyzed at once.")
     parser.add_argument("subjects_dir", help="Path to the subjects_dir, will be created if its not existing")
-    parser.add_argument("paradigm", help="Name of the EEG paradigm, must be one of the: ['rest', 'gpias']")
+    parser.add_argument("paradigm", help="Name of the EEG paradigm, must be one of the: ['rest', 'gpias'] ('dublin' is not supported yet.)")
     parser.add_argument("--config_file", default=None, help="The yaml file containing specific options.")
     parser.add_argument("--overwrite", default="warn", help="must be one of the ['ignore', 'warn', 'raise']")
     parser.add_argument("--verbose", default="ERROR", help="Control verbosity of the logging output. If None, use the default verbosity level.")

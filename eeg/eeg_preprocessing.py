@@ -188,6 +188,11 @@ def preprocess(
             raw.drop_channels(ch_names="VREF")
             montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
+        case ".fif":
+            raw = concatenate_raws([read_raw(fname) for fname in fnames])
+            raw.drop_channels(ch_names="VREF")
+            montage = make_standard_montage("GSN-HydroCel-64_1.0")
+
         case ".bdf":
             raw = concatenate_raws([read_raw(fname, exclude=("EXG")) for fname in fnames])
             raw.pick(["eeg", "stim"])
