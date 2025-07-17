@@ -74,19 +74,18 @@ def extract_eeg_features(
     subject_dir = Path(subjects_dir) / subject_id
     if paradigm not in ["rest", "gpias"]:
         raise ValueError(f"paradigm must be one of the rest or gpias, but got {paradigm} instead.")
-    
-    ep_fname = subject_dir / "epochs" / f"epochs-{paradigm}-eo.fif"
-    epochs = read_epochs(ep_fname, preload=True)
-    epochs.pick(picks="eeg")
-    info = epochs.info
-
-    assert subject_id == info["subject_info"]["first_name"], \
-        f"Subject ID mismatch ({subject_id} != {info['subject_info']['first_name']}) between preprocess and processing sections."
 
     if paradigm == "rest":
+        ep_fname = subject_dir / "epochs" / f"epochs-{paradigm}-eo.fif"
+        epochs = read_epochs(ep_fname, preload=True)
+        epochs.pick(picks="eeg")
+        info = epochs.info
+
+        assert subject_id == info["subject_info"]["first_name"], \
+            f"Subject ID mismatch ({subject_id} != {info['subject_info']['first_name']}) between preprocess and processing sections."
 
         assert paradigm.startswith("rest"), f"paradigm mismatch: {paradigm} != {info['description']}"
-    
+
         ## get values from config file
         if config_file is None:
             yaml_file = os.path.join(os.path.dirname(__file__), 'features-config.yaml')
@@ -339,6 +338,13 @@ def extract_eeg_features(
         logging.info(f"Feature extraction finished without an error!")
 
     if paradigm == "gpias":
+        ep_fname = subject_dir / "epochs" / f"epochs-{paradigm}.fif"
+        epochs = read_epochs(ep_fname, preload=True)
+        epochs.pick(picks="eeg")
+        info = epochs.info
+
+        assert subject_id == info["subject_info"]["first_name"], \
+            f"Subject ID mismatch ({subject_id} != {info['subject_info']['first_name']}) between preprocess and processing sections."
 
         my_dict = {
             "subject_id": [],
