@@ -29,6 +29,7 @@ def ant_to_tide():
     paradigms = ("omi", "gpias", "dublin", "rest", "rest_2", "xxxxx", "xxxxy")
     mapping = {
                 "antinomics_id": [],
+                "paradigm": [],
                 "tide_id": []
                 }
 
@@ -67,8 +68,10 @@ def ant_to_tide():
                 raw.resample(sfreq)
             raw.save(fname_save)
 
-        mapping["antinomics_id"].append(sub_id)
-        mapping["tide_id"].append(tide_id)
+            mapping["antinomics_id"].append(sub_id)
+            mapping["paradigm"].append(paradigm)
+            mapping["tide_id"].append(tide_id)
+        
         tide_id += 1
     
     df = pd.DataFrame(mapping)
