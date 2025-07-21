@@ -35,7 +35,7 @@ def ant_to_tide():
 
     files = os.listdir(input_dir)
     subjects_dict = {}
-    for fname in tqdm(sorted(files, key=lambda f: os.path.getctime(input_dir / f))):
+    for fname in sorted(files, key=lambda f: os.path.getctime(input_dir / f)):
         cond1 = fname.endswith(".vhdr")
         cond2 = any(sub in fname for sub in paradigms)
 
@@ -50,7 +50,8 @@ def ant_to_tide():
             subjects_dict[sub_id].append(paradigm)
 
     tide_id = 70001
-    for sub_id, pars in subjects_dict.items():
+    for sub_id in tqdm(subjects_dict):
+        pars = subjects_dict[sub_id]
         for par in pars:
             input_fname = input_dir / f"{sub_id}_{par}.vhdr"
             print(f"working on {sub_id}_{par}.vhdr ...")
