@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 import pandas as pd
 import argparse
@@ -49,14 +50,15 @@ def ant_to_tide():
             
             subjects_dict[sub_id].append(paradigm)
 
-    tide_id = 70001
-    for sub_id in tqdm(subjects_dict):
+    # print(subjects_dict)
+    
+    
+    tide_id = 70047
+    for sub_id in tqdm(list(subjects_dict.keys())[tide_id-70001:]):
         pars = subjects_dict[sub_id]
         for par in pars:
             input_fname = input_dir / f"{sub_id}_{par}.vhdr"
             print(f"working on {sub_id}_{par}.vhdr ...")
-
-            # cond3 = not (output_dir / str(tide_id) / "eeg" / f"{tide_id}_{par}.fif").exists() # we might need this later
 
             os.makedirs(output_dir / str(tide_id) / "eeg", exist_ok=True)
             os.makedirs(output_dir / str(tide_id) / "audiometry", exist_ok=True)
@@ -68,6 +70,7 @@ def ant_to_tide():
                 raw.load_data()
                 raw.resample(sfreq)
             raw.save(fname_save)
+            del raw
 
             mapping["antinomics_id"].append(sub_id)
             mapping["paradigm"].append(paradigm)
@@ -77,6 +80,6 @@ def ant_to_tide():
     
     df = pd.DataFrame(mapping)
     df.to_csv(Path.cwd() / "antinomics_to_tide.csv")
-
+    
 if __name__ == "__main__":
     ant_to_tide()

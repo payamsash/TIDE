@@ -42,12 +42,12 @@ techniques.
 ## Installation and Basic Usage
 - Clone the repo:
 ```
-git clone https://github.com/payamsash/Antinomics.git
+git clone https://github.com/payamsash/TIDE.git
 ```
 - Install `virtualenv` (if not already installed), and navigate to the `eeg` subfolder where you create the virtual environment, activate the virtual environment and install dependencies from `requirements.txt` after activating the virtual environment:
 ```
 # go to directory
-cd .../Antinomics/eeg
+cd .../TIDE/eeg
 
 # create myenv
 python -m venv myenv
