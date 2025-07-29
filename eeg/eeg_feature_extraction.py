@@ -452,8 +452,11 @@ def add_and_save_df(df, feature, subject_id, subject_dir, paradigm, info, eye_la
     df["site"] = info["experimenter"] 
     df["subject_id"] = subject_id
     csv_fname = subject_dir / "features" / f"features_{feature}_{paradigm}.csv"
+    hdf_fname = subject_dir / "features" / f"features_{feature}_{paradigm}.h5"
     zip_fname = subject_dir / "features" / f"features_{feature}_{paradigm}.zip"
-    df.T.to_csv(csv_fname)
+    df_rounded = df.round(decimals=6).T
+    df_rounded.to_csv(csv_fname)
+    df_rounded.to_hdf(hdf_fname, key=f"features_{feature}_{paradigm}")
 
     with zipfile.ZipFile(zip_fname, "w", zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(csv_fname, os.path.basename(csv_fname))

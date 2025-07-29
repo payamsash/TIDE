@@ -27,7 +27,8 @@ from mne.preprocessing import (ICA,
                                 create_eog_epochs,
                                 create_ecg_epochs,
                                 compute_proj_ecg,
-                                compute_proj_eog
+                                compute_proj_eog,
+                                find_bad_channels_lof
                                 )
 from .tools import (load_config,
                     initiate_logging,
@@ -342,7 +343,9 @@ def preprocess(
         logging.info(f"{raw.info['bads']} are interpolated.")
         raw.interpolate_bads()
     else:
-        logging.info(f"No bad channel was selected for interpolation.")
+        noisy_chs, lof_scores = find_bad_channels_lof(raw, threshold=3, return_scores=True)
+        raw.info["bads"] = noisy_chs
+        logging.info(f"{noisy_chs} were selected as bad channels via LOF method for interpolation, with following scores: {lof_scores}")
     
     ## ICA
     show = False
