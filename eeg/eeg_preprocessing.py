@@ -335,6 +335,11 @@ def preprocess(
         while plt.fignum_exists(fig.number):
             plt.pause(0.1)
 
+    ## automatic detection of bad channels
+    noisy_chs, lof_scores = find_bad_channels_lof(raw, threshold=3, return_scores=True)
+    raw.info["bads"] = noisy_chs
+    logging.info(f"{noisy_chs} were selected as bad channels via LOF method for interpolation, with following scores: {lof_scores}")
+
     if manual_data_scroll:
         raw.annotations.append(onset=0, duration=0, description="bad_segment")
         raw.plot(duration=20.0, n_channels=80, picks="eeg", scalings=dict(eeg=40e-6), block=True)
@@ -342,10 +347,6 @@ def preprocess(
     if len(raw.info["bads"]):
         logging.info(f"{raw.info['bads']} are interpolated.")
         raw.interpolate_bads()
-    else:
-        noisy_chs, lof_scores = find_bad_channels_lof(raw, threshold=3, return_scores=True)
-        raw.info["bads"] = noisy_chs
-        logging.info(f"{noisy_chs} were selected as bad channels via LOF method for interpolation, with following scores: {lof_scores}")
     
     ## ICA
     show = False
