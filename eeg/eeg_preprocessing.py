@@ -220,10 +220,6 @@ def preprocess(
             raw.info["dev_head_t"] = transform
             raw.pick(["eeg", "eog", "stim"])
 
-        # case ".ds":
-        #     raw = concatenate_raws([read_raw(fname) for fname in fnames])
-        #     raw.pick(["eeg", "stim"])
-
         case ".vhdr":   
             if site in ["Regensburg", "Tuebingen"]:
                 if len(fnames) == 1: # probably rest
@@ -302,7 +298,10 @@ def preprocess(
                                                 default_thrs,
                                                 distance,
                                                 logging)
-            
+
+    if paradigm in ["omi", "xxxxx", "xxxxy"]:
+        raw = add_dublin_annotation(raw, paradigm, site)
+
     ## resampling, filtering and re-referencing 
     print("Resampling, filtering and re-referencing ...\n")
     raw.resample(sfreq=250, stim_picks=None)
@@ -535,6 +534,7 @@ def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, 
         split_indices = events_orig[np.isin(events_orig[:, 2], [10001, 10002, 10003, 10004, 10005])]
         scale = 1e-5
         x_thr = 0.001
+        
     if site == "Tuebingen":
         data = raw.get_data(picks="audio")[0]
         key_dict = {10000: "init", 10001: "pre", 10002: "bbn", 10003: "3kHz", 10004: "8kHz", 10005: "post"}
@@ -664,3 +664,59 @@ class DraggableVLine:
 
     def on_release(self, event):
         self.press = False
+
+
+def add_dublin_annotation(raw, paradigm, site):
+
+    event_config = {
+        "omi": {
+            "Austin":    ([2], {2: "Stimulus 4"}, False),
+            "Dublin":    ([4], {4: "Stimulus 4"}, False),
+            "Ghent":     ([1], {1: "Stimulus 4"}, True),
+            "Illinois":  ([1], {1: "Stimulus 4"}, True),
+            "Regensburg":([11], {11: "Stimulus 4"}, True),
+            "Tuebingen": ([215], {215: "Stimulus 4"}, True),
+            "Zuerich":   ([4], {4: "Stimulus 4"}, True),
+        },
+        "xxxxx": {
+            "Austin":    ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, False),
+            "Dublin":    ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, False),
+            "Ghent":     ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
+            "Illinois":  ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
+            "Zuerich":   ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
+            "Regensburg":([12, 13, 14], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
+            "Tuebingen": ([245, 183, 119], {245: "Stimulus 1", 183: "Stimulus 2", 119: "Stimulus 3"}, True),
+        },
+        "xxxxy": {
+            "Austin":    ([1, 2, 3], {1: "Stimulus 11", 2: "Stimulus 12", 3: "Stimulus 13"}, False),
+            "Dublin":    ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, False),
+            "Ghent":     ([1, 2, 3], {1: "Stimulus 11", 2: "Stimulus 12", 3: "Stimulus 13"}, True),
+            "Illinois":  ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, True),
+            "Zuerich":   ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, True),
+            "Regensburg":([12, 13, 14], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
+            "Tuebingen": ([231, 246, 230], {231: "Stimulus 1", 246: "Stimulus 2", 230: "Stimulus 3"}, True),
+        }
+    }
+
+    try:
+        event_ids, mapping, use_annotations = event_config[paradigm][site]
+    except KeyError:
+        raise ValueError(f"Unsupported paradigm/site combination: {paradigm}/{site}")
+
+    if use_annotations:
+        events = events_from_annotations(raw)[0]
+    else:
+        events = find_events(raw)
+
+    mask = np.isin(events[:, 2], event_ids)
+    sub_evs = events[mask]
+
+    annot = annotations_from_events(
+                                    events=sub_evs,
+                                    sfreq=raw.info["sfreq"],
+                                    event_desc=mapping,
+                                    orig_time=raw.info["meas_date"]
+                                )
+    raw.set_annotations(annot)
+    
+    return raw

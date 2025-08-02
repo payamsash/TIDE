@@ -136,7 +136,6 @@ def process(
     ## the real part
     epochs_dir = subject_dir / "epochs"
     if paradigm.startswith("rest"):
-        # return raw
         epochs_list = run_rs_processing(raw, event_ids, logging)
         if len(epochs_list) == 2:
             epochs_eo, epochs_ec = epochs_list
