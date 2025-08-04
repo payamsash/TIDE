@@ -685,7 +685,7 @@ def add_dublin_annotation(raw, paradigm, site):
             "Ghent":     ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
             "Illinois":  ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
             "Zuerich":   ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
-            "Regensburg":([12, 13, 14], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
+            "Regensburg":([14, 13, 12], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
             "Tuebingen": ([245, 183, 119], {245: "Stimulus 1", 183: "Stimulus 2", 119: "Stimulus 3"}, True),
         },
         "xxxxy": {
@@ -694,7 +694,7 @@ def add_dublin_annotation(raw, paradigm, site):
             "Ghent":     ([1, 2, 3], {1: "Stimulus 11", 2: "Stimulus 12", 3: "Stimulus 13"}, True),
             "Illinois":  ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, True),
             "Zuerich":   ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, True),
-            "Regensburg":([12, 13, 14], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
+            "Regensburg":([14, 13, 12], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
             "Tuebingen": ([231, 246, 230], {231: "Stimulus 1", 246: "Stimulus 2", 230: "Stimulus 3"}, True),
         }
     }
@@ -717,19 +717,19 @@ def add_dublin_annotation(raw, paradigm, site):
 
     if paradigm == "xxxxx":
         if not np.count_nonzero(sub_evs[:, 2] == event_ids[0]) == 500:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 1 got {np.count_nonzero(sub_evs[:, 2] == 1)} instead.")
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 1 got {np.count_nonzero(sub_evs[:, 2] == event_ids[0])} instead.")
         if not np.count_nonzero(sub_evs[:, 2] == event_ids[1]) == 75:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 2 got {np.count_nonzero(sub_evs[:, 2] == 2)} instead.")
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 2 got {np.count_nonzero(sub_evs[:, 2] == event_ids[1])} instead.")
         if not np.count_nonzero(sub_evs[:, 2] == event_ids[2]) == 50:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 3 got {np.count_nonzero(sub_evs[:, 2] == 3)} instead.")
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 3 got {np.count_nonzero(sub_evs[:, 2] == event_ids[2])} instead.")
         
     if paradigm == "xxxxy":
         if not np.count_nonzero(sub_evs[:, 2] == event_ids[0]) == 500:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 11 got {np.count_nonzero(sub_evs[:, 2] == 11)} instead.")
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 11 got {np.count_nonzero(sub_evs[:, 2] == event_ids[0])} instead.")
         if not np.count_nonzero(sub_evs[:, 2] == event_ids[1]) == 75:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 12 got {np.count_nonzero(sub_evs[:, 2] == 12)} instead.")
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 12 got {np.count_nonzero(sub_evs[:, 2] == event_ids[1])} instead.")
         if not np.count_nonzero(sub_evs[:, 2] == event_ids[2]) == 50:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 13 got {np.count_nonzero(sub_evs[:, 2] == 13)} instead.")    
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 13 got {np.count_nonzero(sub_evs[:, 2] == event_ids[2])} instead.")    
 
     annot = annotations_from_events(
                                     events=sub_evs,
