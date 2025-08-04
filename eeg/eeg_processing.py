@@ -225,7 +225,7 @@ def process(
         ## saving
         report.save(fname=fname_report.with_suffix('.html'), open_browser=False, overwrite=True)
     
-    print("\033[32mAnalysis finished successfully!\n")
+    print("\033[32mEEG data were processed sucessfully!\n")
     logging.info(f"Analysis finished without an error!")
 
 
@@ -316,10 +316,10 @@ def run_erp_processing(raw, logging):
         case "omi" | "xxxxx" | "xxxxy":
             baseline = (None, 0)
 
-    if raw.info["experimenter"] == "Austin":
-        events = find_events(raw)
-        event_annots = annotations_from_events(events, raw.info["sfreq"])
-        raw.set_annotations(event_annots)
+    # if raw.info["experimenter"] == "Austin":
+    #     events = find_events(raw)
+    #     event_annots = annotations_from_events(events, raw.info["sfreq"])
+    #     raw.set_annotations(event_annots)
 
     events, event_ids = events_from_annotations(raw)
     logging.info("Creating epochs...")

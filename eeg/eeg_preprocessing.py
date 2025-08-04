@@ -190,9 +190,33 @@ def preprocess(
             montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
         case ".fif":
-            raw = concatenate_raws([read_raw(fname) for fname in fnames])
-            raw.drop_channels(ch_names="VREF")
-            montage = make_standard_montage("GSN-HydroCel-64_1.0")
+            if site == "Austin":
+                raw = concatenate_raws([read_raw(fname) for fname in fnames])
+                raw.drop_channels(ch_names="VREF")
+                montage = make_standard_montage("GSN-HydroCel-64_1.0")
+
+            if site == "Zuerich":
+                captrak_dir = Path(fname).parent / "captrack"
+                try:
+                    for file_ck in os.listdir(captrak_dir):
+                        if file_ck.endswith(f"_{subject_id}.bvct"): # assume that its same for both visits
+                            montage = read_dig_captrak(file_ck)
+                except:
+                    montage = make_standard_montage("easycap-M1")
+
+                ch_types = {"O1": "eog",
+                            "O2": "eog",
+                            "PO7": "eog",
+                            "PO8": "eog",
+                            "Pulse": "ecg",
+                            "Resp": "ecg",
+                            "Audio": "stim"
+                            }
+                raw = read_vhdr_input_fname(Path(fname))
+                raw.set_channel_types(ch_types)
+                raw.pick(["eeg", "eog", "ecg", "stim"])
+                eog_chs_1 = ["PO7", "PO8"]
+                eog_chs_2 = ["O1", "O2"]
 
         case ".bdf":
             raw = concatenate_raws([read_raw(fname, exclude=("EXG")) for fname in fnames])
@@ -240,29 +264,6 @@ def preprocess(
                 except: 
                     print("probably this data is old recording from Regensburg")
                 raw.pick(["eeg", "stim"])
-
-            if site == "Zuerich":
-                captrak_dir = Path(fname).parent / "captrack"
-                try:
-                    for file_ck in os.listdir(captrak_dir):
-                        if file_ck.endswith(f"_{subject_id}.bvct"): # assume that its same for both visits
-                            montage = read_dig_captrak(file_ck)
-                except:
-                    montage = make_standard_montage("easycap-M1")
-
-                ch_types = {"O1": "eog",
-                            "O2": "eog",
-                            "PO7": "eog",
-                            "PO8": "eog",
-                            "Pulse": "ecg",
-                            "Resp": "ecg",
-                            "Audio": "stim"
-                            }
-                raw = read_vhdr_input_fname(Path(fname))
-                raw.set_channel_types(ch_types)
-                raw.pick(["eeg", "eog", "ecg", "stim"])
-                eog_chs_1 = ["PO7", "PO8"]
-                eog_chs_2 = ["O1", "O2"]
 
     
     ## now the real part
@@ -710,6 +711,25 @@ def add_dublin_annotation(raw, paradigm, site):
 
     mask = np.isin(events[:, 2], event_ids)
     sub_evs = events[mask]
+
+    if paradigm == "omi" and np.count_nonzero(sub_evs[:, 2] == event_ids[0]) != 125:
+        raise ValueError(f"omission paradigm must have 125 events got {len(sub_evs)} instead.")
+
+    if paradigm == "xxxxx":
+        if not np.count_nonzero(sub_evs[:, 2] == event_ids[0]) == 500:
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 1 got {np.count_nonzero(sub_evs[:, 2] == 1)} instead.")
+        if not np.count_nonzero(sub_evs[:, 2] == event_ids[1]) == 75:
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 2 got {np.count_nonzero(sub_evs[:, 2] == 2)} instead.")
+        if not np.count_nonzero(sub_evs[:, 2] == event_ids[2]) == 50:
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 3 got {np.count_nonzero(sub_evs[:, 2] == 3)} instead.")
+        
+    if paradigm == "xxxxy":
+        if not np.count_nonzero(sub_evs[:, 2] == event_ids[0]) == 500:
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 11 got {np.count_nonzero(sub_evs[:, 2] == 11)} instead.")
+        if not np.count_nonzero(sub_evs[:, 2] == event_ids[1]) == 75:
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 12 got {np.count_nonzero(sub_evs[:, 2] == 12)} instead.")
+        if not np.count_nonzero(sub_evs[:, 2] == event_ids[2]) == 50:
+            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 13 got {np.count_nonzero(sub_evs[:, 2] == 13)} instead.")    
 
     annot = annotations_from_events(
                                     events=sub_evs,
