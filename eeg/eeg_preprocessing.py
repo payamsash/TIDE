@@ -777,6 +777,9 @@ def add_dublin_annotation(raw, paradigm, site):
         if not np.count_nonzero(sub_evs[:, 2] == event_ids[2]) == 50:
             raise ValueError(f"{paradigm} paradigm must have 500 events with ID 13 got {np.count_nonzero(sub_evs[:, 2] == event_ids[2])} instead.")    
 
+    if site in ["Illinois"]:
+        sub_evs[:, 0] = sub_evs[:, 0] + 0.5 * raw.info["sfreq"]
+
     annot = annotations_from_events(
                                     events=sub_evs,
                                     sfreq=raw.info["sfreq"],
