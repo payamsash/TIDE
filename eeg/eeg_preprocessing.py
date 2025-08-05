@@ -675,7 +675,7 @@ def add_dublin_annotation(raw, paradigm, site):
             "Dublin":    ([4], {4: "Stimulus 4"}, False),
             "Ghent":     ([1], {1: "Stimulus 4"}, True),
             "Illinois":  ([1], {1: "Stimulus 4"}, True),
-            "Regensburg":([11], {11: "Stimulus 4"}, True),
+        #    "Regensburg":([11], {11: "Stimulus 4"}, True),
             "Tuebingen": ([215], {215: "Stimulus 4"}, True),
             "Zuerich":   ([4], {4: "Stimulus 4"}, True),
         },
@@ -699,18 +699,45 @@ def add_dublin_annotation(raw, paradigm, site):
         }
     }
 
-    try:
-        event_ids, mapping, use_annotations = event_config[paradigm][site]
-    except KeyError:
-        raise ValueError(f"Unsupported paradigm/site combination: {paradigm}/{site}")
+    
+    if site == "Regensburg": 
+        if paradigm == "omi":
+            
+            height = 0.001
+            distance = 10
+            threshold = 0.15
+            threshold1 = 0.15
+            threshold2 = 1
 
-    if use_annotations:
-        events = events_from_annotations(raw)[0]
+            audio_data, times = raw.get_data("audio", return_times=True)
+            peak_idxs, _ = find_peaks(audio_data[0], height=height, distance=distance)
+            stimuli = times[peak_idxs].astype(float)
+
+            split_indices = np.where(np.diff(stimuli) > threshold1)[0] + 1 
+            segments = np.split(stimuli, split_indices)
+            first_elements = np.array([seg[0] for seg in segments if len(seg) > 0])
+            split_indices = np.where(np.diff(first_elements) > threshold2)[0] + 1 
+            segments = np.split(first_elements, split_indices)
+            first_elements = np.array([seg[0] * raw.info["sfreq"] for seg in segments if len(seg) > 0])
+
+            sub_evs = np.zeros(shape=(len(first_elements), 3), dtype=int)
+            sub_evs[:, 0] = first_elements
+            sub_evs[:, 2] = 4
+            event_ids, mapping, _ = event_config["omi"]["Dublin"]
+
     else:
-        events = find_events(raw)
+        try:
+            event_ids, mapping, use_annotations = event_config[paradigm][site]
+        except KeyError:
+            raise ValueError(f"Unsupported paradigm/site combination: {paradigm}/{site}")
 
-    mask = np.isin(events[:, 2], event_ids)
-    sub_evs = events[mask]
+        if use_annotations:
+            events = events_from_annotations(raw)[0]
+        else:
+            events = find_events(raw)
+
+        mask = np.isin(events[:, 2], event_ids)
+        sub_evs = events[mask]
 
     if paradigm == "omi" and np.count_nonzero(sub_evs[:, 2] == event_ids[0]) != 125:
         raise ValueError(f"omission paradigm must have 125 events got {len(sub_evs)} instead.")
@@ -738,5 +765,5 @@ def add_dublin_annotation(raw, paradigm, site):
                                     orig_time=raw.info["meas_date"]
                                 )
     raw.set_annotations(annot)
-    
+
     return raw
