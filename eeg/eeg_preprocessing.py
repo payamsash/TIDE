@@ -204,7 +204,8 @@ def preprocess(
                 except:
                     montage = make_standard_montage("easycap-M1")
 
-                ch_types = {"O1": "eog",
+                ch_types = {
+                            "O1": "eog",
                             "O2": "eog",
                             "PO7": "eog",
                             "PO8": "eog",
@@ -557,7 +558,7 @@ def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, 
         
         ## get the peaks
         peaks, _ = find_peaks(blocks_dict[key], height=100*scale, distance=100, prominence=100*scale)
-        peak_count, bin_edges = np.histogram(blocks_dict[key][peaks], bins=50)
+        peak_count, bin_edges = np.histogram(blocks_dict[key][peaks], bins=100)
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
         idx = order.index(key)
         axs[idx].bar(bin_centers, peak_count, width=np.diff(bin_edges), color="lightsteelblue", align='center', edgecolor='black')
@@ -602,7 +603,7 @@ def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, 
                 peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance)
                 categorized[peaks] = events_dict[main_key][sub_key]
                 if not len(peaks) == 25:
-                    raise ValueError(f"number of events for event id {sub_key} must be 25, got {len(peaks)} instead.")
+                    raise ValueError(f"number of events for event id {sub_key} in {main_key} must be 25, got {len(peaks)} instead.")
                 logging.info(f"{len(peaks)} {sub_key} events found in {main_key} part.")
 
         if main_key in ["bbn", "3kHz", "8kHz"]:
