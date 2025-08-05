@@ -1,10 +1,10 @@
 Zuerich:
   psd_check: true
   manual_data_scroll: true
-  run_ica: false
+  run_ica: true
   manual_ica_removal: false
-  ssp_eog: true
-  ssp_ecg: true
+  ssp_eog: false
+  ssp_ecg: false
   create_report: true
 
 Austin:

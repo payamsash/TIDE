@@ -219,7 +219,7 @@ def process(
         report = open_report(fname_report)
         report.add_epochs(epochs=epochs_concat, psd=False, title='Epochs')
 
-        if raw.info["description"] == "gpias":
+        if raw.info["description"] in ["gpias", "omi", "xxxxx", "xxxxy"]:
             report.add_evokeds(evokeds)
         
         ## saving
