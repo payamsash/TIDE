@@ -99,7 +99,7 @@ def process(
     
     ## get values from config file
     if config_file is None:
-        yaml_file = os.path.join(os.path.dirname(__file__), 'processing-config.yaml')
+        yaml_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'processing-config.yaml')
         config = load_config(site, yaml_file)
     else:
         config = load_config(site, config_file)
