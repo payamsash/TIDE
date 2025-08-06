@@ -22,5 +22,3 @@
 **/.DS_Store
 **/Thumbs.db
 
-# Ignore MRI folder
-mri/
