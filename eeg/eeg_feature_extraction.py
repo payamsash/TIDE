@@ -88,7 +88,7 @@ def extract_eeg_features(
 
         ## get values from config file
         if config_file is None:
-            yaml_file = os.path.join(os.path.dirname(__file__), 'features-config.yaml')
+            yaml_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'features-config.yaml')
             config = load_config("general", yaml_file)
         else:
             config = load_config("general", config_file)

@@ -99,7 +99,7 @@ def preprocess(
     
     ## get values from config file
     if config_file is None:
-        yaml_file = os.path.join(os.path.dirname(__file__), 'preprocessing-config.yaml')
+        yaml_file = os.path.join(os.path.dirname(__file__), '..', 'config', 'preprocessing-config.yaml')
         config = load_config(site, yaml_file)
     else:
         config = load_config(site, config_file)

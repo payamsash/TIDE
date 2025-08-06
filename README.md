@@ -39,33 +39,55 @@ techniques.
 
 *Author: Winfried Schlee*
 
+
+## Project Structure
+```plaintext
+.
+├── assets
+│   ├── fonts                   # Font files for visuals
+│   └── images                  # Images used in visuals
+├── docs                        # Documentation and project information
+├── examples                    # Example scripts for using the library
+├── src
+│   ├── preprocess.py           
+│   ├── process.py
+│   ├── extract_features.py     
+├── ml                          # Machine learning stuff
+├── venv                        # Virtual environment for the project
+└── config                      # Config files to customize processing
+```
+
 ## Installation and Basic Usage
-- Clone the repo:
-```
-git clone https://github.com/payamsash/TIDE.git
-```
-- Install `virtualenv` (if not already installed), and navigate to the `eeg` subfolder where you create the virtual environment, activate the virtual environment and install dependencies from `requirements.txt` after activating the virtual environment:
-```
-# go to directory
-cd .../TIDE/eeg
+1. Clone the repo:
+    ```
+    git clone https://github.com/payamsash/TIDE.git
+    ```
+### with venv
+2. Set up a virtual environment (optional but recommended):
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # On Windows: .\env\Scripts\activate
+    ```
 
-# create myenv
-python -m venv myenv
+3. Navigate to the project directory and install dependencies:
+    ```bash
+    cd rspv
+    pip install -r requirements.txt
+    ```
 
-# On Windows, use:
-myenv\Scripts\activate
-
-# On Mac/Linux, use:
-source myenv/bin/activate
-
-# install the packages
-pip install -r requirements.txt
-```
-
-Navigate to the main folder, there should be 3 main functions: `preprocess.py`, `process.py` and `extract_features.py`. Run them as following in your terminal (activated venv), which will guide you how to use them (e.g.):
-```
-python preprocess.py --help
-```
+### with Conda
+3. Create a Conda environment:
+   ```bash
+   conda env create -f environment.yml
+    ```
+4. Activate Conda
+    ```bash
+    conda activate tide_venv
+    ```
+5. Run the main script to start processing signals and rendering visuals:
+    ```bash
+    python src/preprocess.py --help
+    ```
 ---
 
 ## Usage
