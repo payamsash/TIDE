@@ -213,7 +213,7 @@ def preprocess(
                             "Resp": "ecg",
                             "Audio": "stim"
                             }
-                raw = read_vhdr_input_fname(Path(fname))
+                raw = read_raw(Path(fname))
                 raw.set_channel_types(ch_types)
                 raw.pick(["eeg", "eog", "ecg", "stim"])
                 eog_chs_1 = ["PO7", "PO8"]
@@ -247,7 +247,7 @@ def preprocess(
 
         case ".vhdr":   
             if site in ["Regensburg", "Tuebingen"]:
-                if len(fnames) == 1: # probably rest
+                if len(fnames) == 1:
                     raw = read_vhdr_input_fname(fnames[0])
                 else:
                     raws = []
@@ -600,7 +600,7 @@ def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, 
         if  main_key in ["pre", "post"]:
             for sub_key in list(height_limits.keys())[:5]:
                 height = height_limits[sub_key]
-                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance)
+                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance, prominence=100*scale)
                 categorized[peaks] = events_dict[main_key][sub_key]
                 if not len(peaks) == 25:
                     raise ValueError(f"number of events for event id {sub_key} in {main_key} must be 25, got {len(peaks)} instead.")
@@ -609,7 +609,7 @@ def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, 
         if main_key in ["bbn", "3kHz", "8kHz"]:
             for sub_key in list(height_limits.keys())[5:]:
                 height = height_limits[sub_key]
-                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance)
+                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance, prominence=100*scale)
                 categorized[peaks] = events_dict[main_key][sub_key]
                 if not (len(peaks) == 100 or len(peaks) == 50): # must fix with correct vals
                     raise ValueError(f"number of events for event id {sub_key} in {main_key} part must be 100, got {len(peaks)} instead.")
@@ -721,7 +721,10 @@ def add_dublin_annotation(raw, paradigm, site):
         first_elements = np.array([seg[0] * raw.info["sfreq"] for seg in segments if len(seg) > 0]) # change 0 to -1 to get last trigger
 
         sub_evs = np.zeros(shape=(len(first_elements), 3), dtype=int)
-        sub_evs[:, 0] = first_elements
+        try:
+            sub_evs[:, 0] = first_elements
+        except:
+            warn("There is small mismatch between trigger and stimulus number, so we proceed with triggers ...")
 
         event_ids, mapping, _ = event_config[paradigm][site]
         events = events_from_annotations(raw)[0]
@@ -780,6 +783,9 @@ def add_dublin_annotation(raw, paradigm, site):
 
     if site in ["Illinois"]:
         sub_evs[:, 0] = sub_evs[:, 0] + 0.5 * raw.info["sfreq"]
+    
+    if site in ["Zuerich"]:
+        sub_evs[:, 0] = sub_evs[:, 0] + 0.1 * raw.info["sfreq"]
 
     annot = annotations_from_events(
                                     events=sub_evs,
