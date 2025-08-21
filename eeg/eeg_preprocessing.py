@@ -196,15 +196,11 @@ def preprocess(
                 montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
             if site == "Zuerich":
-                captrak_dir = Path(fname).parent / "captrack"
-                try:
-                    for file_ck in os.listdir(captrak_dir):
-                        if file_ck.endswith(f"_{subject_id}.bvct"): # assume that its same for both visits
-                            montage = read_dig_captrak(file_ck)
-                except:
-                    montage = make_standard_montage("easycap-M1")
+                montage = make_standard_montage("easycap-M1")
 
-                ch_types = {
+                if subject_id in [70001, 70002, 70003, 70007, 70009, 70030, 70042, 70052]: # old recordings
+                    ssp_eog = True # will overwrite the option selected by user
+                    ch_types = {
                             "O1": "eog",
                             "O2": "eog",
                             "PO7": "eog",
@@ -213,12 +209,20 @@ def preprocess(
                             "Resp": "ecg",
                             "Audio": "stim"
                             }
+                    eog_chs_1 = ["PO7", "PO8"]
+                    eog_chs_2 = ["O1", "O2"]
+                
+                else:
+                    ch_types = {
+                                "Pulse": "ecg",
+                                "Resp": "ecg",
+                                "Audio": "stim"
+                                }
+                
                 raw = read_raw(Path(fname))
                 raw.set_channel_types(ch_types)
                 raw.pick(["eeg", "eog", "ecg", "stim"])
-                eog_chs_1 = ["PO7", "PO8"]
-                eog_chs_2 = ["O1", "O2"]
-
+                
         case ".bdf":
             raw = concatenate_raws([read_raw(fname, exclude=("EXG")) for fname in fnames])
             raw.pick(["eeg", "stim"])
@@ -380,6 +384,7 @@ def preprocess(
             ica.apply(raw, exclude=eog_indices_fil)
             logging.info(f"ICA analysis was performed and {len(eog_indices_fil)} eye related components were dropped.")
     
+    ssp_ecg = False # overwrite user option
     if ssp_ecg:
         print("Finding and removing ECG related components...\n")
         
