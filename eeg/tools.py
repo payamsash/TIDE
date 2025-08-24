@@ -296,7 +296,5 @@ def gpias_constants():
                                 "post": [0.44, 0.74, 1, 1.25]
                                 }
                     }
-
     distance = 25
-
     return events_dict, default_thrs, distance
