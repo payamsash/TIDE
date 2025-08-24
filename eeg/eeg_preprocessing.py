@@ -297,18 +297,7 @@ def preprocess(
         
     ## if paradigm gpias, we need to extract trig times from audio and save in annotation
     if paradigm == "gpias":
-        raw = add_gpias_annotation(raw, paradigm, site)
-
-
-        if site in ["Zuerich", "Regensburg", "Dublin", "Tuebingen"]:
-            events_dict, default_thrs, distance = gpias_constants()
-            raw = create_stim_channel_from_audio(raw,
-                                                subject_dir,
-                                                events_dict,
-                                                default_thrs,
-                                                distance,
-                                                logging)
-
+        raw = add_gpias_annotation(raw, site)
 
     if paradigm in ["omi", "xxxxx", "xxxxy"]:
         raw = add_dublin_annotation(raw, paradigm, site)
@@ -544,39 +533,38 @@ def add_dublin_annotation(raw, paradigm, site):
     return raw
 
 
-def add_gpias_annotation(raw, paradigm, site):
+def add_gpias_annotation(raw, site):
 
-
-
-
-
-
-
-
-
-
-
-def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, distance, logging):
+    titles = ["pre", "bbn", "3khz", "8khz", "post"]
     
-    site = raw.info["experimenter"]
-    order = ["pre", "bbn", "3kHz", "8kHz", "post"]
-    
-    if site == "Dublin":
-        events = find_events(raw, initial_event=True)
-        split_indices = np.where(events[:, 2] == 65536)[0]
-        if len(split_indices) == 5:
-            logging.info(f"Five blocks of {order} are detected.")
+    if site == "Regensburg":
+        events, events_dict = mne.events_from_annotations(raw)
+        edge_ids = [10002, 10003, 10004, 10005]
+        onsets = {id_: events[events[:, 2] == id_][0][0] / raw.info["sfreq"] for id_ in edge_ids}
 
-        for idx, (i, blck) in enumerate(zip(split_indices, order)):
-            if not idx == len(split_indices) - 1:
-                sub_evs = events[i:split_indices[idx+1]]
-            else:
-                sub_evs = events[i:]
-            
-            if blck in ["pre", "post"]:
-                mapping = dict(zip([2, 6, 7, 10, 11], [f'PO70_{blck}', f'PO75_{blck}', f'PO80_{blck}', f'PO85_{blck}', f'PO90_{blck}'])) 
-            if blck in ["bbn", "3kHz", "8kHz"]:
-                mapping = dict(zip([5, 1, 3], [f'PO_{blck}', f'GO_{blck}', f'GP_{blck}']))
+        raw_pre   = raw.copy().crop(tmax=onsets[10002])
+        raw_bbn   = raw.copy().crop(tmin=onsets[10002], tmax=onsets[10003])
+        raw_3     = raw.copy().crop(tmin=onsets[10003], tmax=onsets[10004])
+        raw_8     = raw.copy().crop(tmin=onsets[10004], tmax=onsets[10005])
+        raw_post  = raw.copy().crop(tmin=onsets[10005])
+        raws = [raw_pre, raw_bbn, raw_3, raw_8, raw_post]
+
+        gpias_events_dict, default_thrs = gpias_constants()
+        events_dict = run_multi_threshold_gui(
+                                                raws,
+                                                titles,
+                                                default_thrs[site].values().tolist()
+                                                )
+
+
+
+
+
+
+
+
+
+'''
     
             annot_from_events = annotations_from_events(    
                                                         sub_evs[1:],
@@ -586,149 +574,9 @@ def create_stim_channel_from_audio(raw, subject_dir, events_dict, default_thrs, 
                                                         )
             raw.set_annotations(raw.annotations + annot_from_events)
 
-        return raw
 
-    events_orig = events_from_annotations(raw)[0]
-    if site == "Zuerich":
-        data = raw.get_data(picks="Audio")[0]
-        key_dict = {0: "init", 1: "pre", 2: "bbn", 3: "3kHz", 4: "8kHz", 5: "post"}
-        split_indices = events_orig[np.isin(events_orig[:, 2], [1, 2, 3, 4, 5])]
-        scale = 1
-        x_thr = 100
 
-    if site == "Regensburg":
-        data = raw.get_data(picks="audio")[0]
-        key_dict = {10000: "init", 10001: "pre", 10002: "bbn", 10003: "3kHz", 10004: "8kHz", 10005: "post"}
-        split_indices = events_orig[np.isin(events_orig[:, 2], [10001, 10002, 10003, 10004, 10005])]
-        scale = 1e-5
-        x_thr = 0.001
-        
-    if site == "Tuebingen":
-        data = raw.get_data(picks="audio")[0]
-        key_dict = {10000: "init", 10001: "pre", 10002: "bbn", 10003: "3kHz", 10004: "8kHz", 10005: "post"}
-        split_indices = events_orig[np.isin(events_orig[:, 2], [10001, 10002, 10003, 10004, 10005])]
-        scale = 1e-5
-        x_thr = 0.01
 
-    segments = np.split(data, split_indices[:, 0])
-    blocks =[key_dict[i] for i in split_indices[:, 2]]
-    blocks_dict = dict(zip(["init"] + blocks, segments))
-    logging.info(f"Five blocks of {order} are detected.")
-
-    ## get stim levels
-    fig, axs = plt.subplots(1, 5, figsize=(17, 3.5), layout="tight")
-    lines = []
-    for key in blocks_dict:
-        if key == "init": 
-            continue
-        
-        ## get the peaks
-        peaks, _ = find_peaks(blocks_dict[key], height=100*scale, distance=100, prominence=100*scale)
-        peak_count, bin_edges = np.histogram(blocks_dict[key][peaks], bins=100)
-        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        idx = order.index(key)
-        axs[idx].bar(bin_centers, peak_count, width=np.diff(bin_edges), color="lightsteelblue", align='center', edgecolor='black')
-        axs[idx].set_ylim(0, max(peak_count) + 5)
-        axs[idx].set_title(f"{key}", fontstyle="italic")
-        axs[idx].spines[["right", "top"]].set_visible(False)
-
-        ## thrsholds
-        init_thrs = list(default_thrs[site].values())
-        thrs = init_thrs[idx]
-        colors = ['red', 'green', 'blue', 'magenta']
-        for thresh, col in zip(thrs, colors):
-            line = axs[idx].axvline(thresh, color=col, linestyle='--', linewidth=2)
-            lines.append(line)
-        
-        draggers = [DraggableVLine(line, x_thr) for line in lines]
-        def on_close(event):
-            final_positions = [line.get_xdata()[0] for line in lines]
-            np.save(subject_dir / "thrs.npy", np.array(final_positions))
-        fig.canvas.mpl_connect('close_event', on_close)
-    plt.show(block=True)
-
-    thrs = np.load(subject_dir / "thrs.npy", allow_pickle=True)
-    height_limits = {
-                    "PO70": [thrs[0] * 0.5, thrs[0]],
-                    "PO75": [thrs[0], thrs[1]],
-                    "PO80": [thrs[1], thrs[2]],
-                    "PO85": [thrs[2], thrs[3]],
-                    "PO90": [thrs[3], thrs[3] * 2],
-                    "GO": [thrs[4] * 0.5, thrs[4]],
-                    "GP": [thrs[4], thrs[6]],
-                    "PO": [thrs[6], thrs[6] * 2],
-                    }
-    logging.info(f"Threshold values are selected to distinguish events as following: {height_limits}")
-    
-    ## get triggers from blocks
-    for main_key, signal in blocks_dict.items():
-        categorized = np.zeros_like(signal, dtype=int)
-        if  main_key in ["pre", "post"]:
-            for sub_key in list(height_limits.keys())[:5]:
-                height = height_limits[sub_key]
-                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance, prominence=100*scale)
-                categorized[peaks] = events_dict[main_key][sub_key]
-                if not len(peaks) == 25:
-                    raise ValueError(f"number of events for event id {sub_key} in {main_key} must be 25, got {len(peaks)} instead.")
-                logging.info(f"{len(peaks)} {sub_key} events found in {main_key} part.")
-
-        if main_key in ["bbn", "3kHz", "8kHz"]:
-            for sub_key in list(height_limits.keys())[5:]:
-                height = height_limits[sub_key]
-                peaks, _ = find_peaks(blocks_dict[main_key], height=height, distance=distance, prominence=100*scale)
-                categorized[peaks] = events_dict[main_key][sub_key]
-                if not (len(peaks) == 100 or len(peaks) == 50): # must fix with correct vals
-                    raise ValueError(f"number of events for event id {sub_key} in {main_key} part must be 100, got {len(peaks)} instead.")
-                logging.info(f"{len(peaks)} {sub_key} events found in {main_key} part.")
-        
-        if main_key == "init":
-            pass
-
-        blocks_dict[main_key] = categorized
-    
-    ## make them stim channel
-    stim_data = np.concatenate(list(blocks_dict.values()))
-    info = create_info(["STI1"], raw.info['sfreq'], ['stim'])
-    stim_raw = RawArray(stim_data[np.newaxis,], info)
-    raw.add_channels([stim_raw], force_update_info=True)
-    events = find_events(raw, stim_channel="STI1", output="onset", min_duration=0, shortest_event=1)
-    mapping = {value: f"{sub_key}_{key}"
-                for key, subdict in events_dict.items()
-                for sub_key, value in subdict.items()
-                } 
-    annot_from_events = annotations_from_events(events,
-                                                sfreq=raw.info["sfreq"],
-                                                event_desc=mapping,
-                                                orig_time=raw.info["meas_date"]
-                                                )
-    raw.set_annotations(annot_from_events)
-    raw.drop_channels(ch_names="STI1")
-    os.remove(subject_dir / "thrs.npy")
-    logging.info(f"Events are created and saved as annotation in raw data.")
 
     return raw
-
-class DraggableVLine:
-    def __init__(self, line, x_thr):
-        self.line = line
-        self.x_thr = x_thr
-        self.press = False
-        self.cid_press   = line.figure.canvas.mpl_connect('button_press_event',   self.on_press)
-        self.cid_release = line.figure.canvas.mpl_connect('button_release_event', self.on_release)
-        self.cid_motion  = line.figure.canvas.mpl_connect('motion_notify_event',  self.on_motion)
-
-    def on_press(self, event):
-        if event.inaxes != self.line.axes:
-            return
-        x0 = self.line.get_xdata()[0]
-        if abs(event.xdata - x0) < self.x_thr:
-            self.press = True
-
-    def on_motion(self, event):
-        if not self.press or event.inaxes != self.line.axes:
-            return
-        self.line.set_xdata([event.xdata, event.xdata])
-        self.line.figure.canvas.draw_idle()
-
-    def on_release(self, event):
-        self.press = False
+'''
