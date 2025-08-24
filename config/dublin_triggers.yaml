@@ -1,0 +1,143 @@
+omi:
+  Austin:
+  - - 2
+  - 2: Stimulus 4
+  - false
+  Dublin:
+  - - 4
+  - 4: Stimulus 4
+  - false
+  Ghent:
+  - - 1
+  - 1: Stimulus 4
+  - true
+  Illinois:
+  - - 1
+  - 1: Stimulus 4
+  - true
+  Regensburg:
+  - - 11
+  - 11: Stimulus 4
+  - true
+  Tuebingen:
+  - - 215
+  - 215: Stimulus 4
+  - true
+  Zuerich:
+  - - 4
+  - 4: Stimulus 4
+  - true
+xxxxx:
+  Austin:
+  - - 1
+    - 2
+    - 3
+  - 1: Stimulus 1
+    2: Stimulus 2
+    3: Stimulus 3
+  - false
+  Dublin:
+  - - 1
+    - 2
+    - 3
+  - 1: Stimulus 1
+    2: Stimulus 2
+    3: Stimulus 3
+  - false
+  Ghent:
+  - - 1
+    - 2
+    - 3
+  - 1: Stimulus 1
+    2: Stimulus 2
+    3: Stimulus 3
+  - true
+  Illinois:
+  - - 1
+    - 2
+    - 3
+  - 1: Stimulus 1
+    2: Stimulus 2
+    3: Stimulus 3
+  - true
+  Zuerich:
+  - - 1
+    - 2
+    - 3
+  - 1: Stimulus 1
+    2: Stimulus 2
+    3: Stimulus 3
+  - true
+  Regensburg:
+  - - 14
+    - 13
+    - 12
+  - 14: Stimulus 1
+    13: Stimulus 2
+    12: Stimulus 3
+  - true
+  Tuebingen:
+  - - 245
+    - 183
+    - 119
+  - 245: Stimulus 1
+    183: Stimulus 2
+    119: Stimulus 3
+  - true
+xxxxy:
+  Austin:
+  - - 1
+    - 2
+    - 3
+  - 1: Stimulus 11
+    2: Stimulus 12
+    3: Stimulus 13
+  - false
+  Dublin:
+  - - 11
+    - 12
+    - 13
+  - 11: Stimulus 11
+    12: Stimulus 12
+    13: Stimulus 13
+  - false
+  Ghent:
+  - - 1
+    - 2
+    - 3
+  - 1: Stimulus 11
+    2: Stimulus 12
+    3: Stimulus 13
+  - true
+  Illinois:
+  - - 11
+    - 12
+    - 13
+  - 11: Stimulus 11
+    12: Stimulus 12
+    13: Stimulus 13
+  - true
+  Zuerich:
+  - - 11
+    - 12
+    - 13
+  - 11: Stimulus 11
+    12: Stimulus 12
+    13: Stimulus 13
+  - true
+  Regensburg:
+  - - 14
+    - 13
+    - 12
+  - 14: Stimulus 1
+    13: Stimulus 2
+    12: Stimulus 3
+  - true
+  Tuebingen:
+  - - 231
+    - 246
+    - 230
+  - 231: Stimulus 1
+    246: Stimulus 2
+    230: Stimulus 3
+  - true
