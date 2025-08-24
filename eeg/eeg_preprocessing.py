@@ -3,6 +3,7 @@
 
 import os
 from pathlib import Path
+import yaml
 import time
 from warnings import warn
 import numpy as np
@@ -296,6 +297,9 @@ def preprocess(
         
     ## if paradigm gpias, we need to extract trig times from audio and save in annotation
     if paradigm == "gpias":
+        raw = add_gpias_annotation(raw, paradigm, site)
+
+
         if site in ["Zuerich", "Regensburg", "Dublin", "Tuebingen"]:
             events_dict, default_thrs, distance = gpias_constants()
             raw = create_stim_channel_from_audio(raw,
@@ -304,6 +308,7 @@ def preprocess(
                                                 default_thrs,
                                                 distance,
                                                 logging)
+
 
     if paradigm in ["omi", "xxxxx", "xxxxy"]:
         raw = add_dublin_annotation(raw, paradigm, site)
@@ -329,6 +334,7 @@ def preprocess(
                     "for more information on filter type see:"
                     "https://mne.tools/stable/auto_tutorials/preprocessing/25_background_filtering.html"
                 )
+    raw.set_eeg_reference("average", projection=False)            
     raw.set_eeg_reference("average", projection=True)
     raw.apply_proj()
     logging.info(f"Average reference applied to raw data.")
@@ -492,6 +498,61 @@ def preprocess(
         
     print("\033[32mEEG data were preprocessed sucessfully!\n")
     logging.info(f"Preprocessing finished without an error.")
+
+
+def add_dublin_annotation(raw, paradigm, site):
+
+    with open("../config/dublin_triggers.yaml", "r") as f:
+        event_config = yaml.safe_load(f)
+
+    try:
+        event_ids, mapping, use_annotations = event_config[paradigm][site]
+    except KeyError:
+        raise ValueError(f"Unsupported paradigm/site combination: {paradigm}/{site}")
+
+    if use_annotations:
+        events = events_from_annotations(raw)[0]
+    else:
+        events = find_events(raw)
+    mask = np.isin(events[:, 2], event_ids)
+    sub_evs = events[mask]
+
+    expected_counts = {
+                        "omi": {0: 125},                      
+                        "xxxxx": {0: 500, 1: 75, 2: 50},      
+                        "xxxxy": {0: 500, 1: 75, 2: 50}, 
+                        }
+    for idx, expected in expected_counts[paradigm].items():
+        actual = np.count_nonzero(sub_evs[:, 2] == event_ids[idx])
+        if actual != expected:
+            raise ValueError(f"{paradigm} paradigm must have {expected} events got {actual} instead.")
+
+    if site in ["Illinois"]:
+        sub_evs[:, 0] = sub_evs[:, 0] + 0.5 * raw.info["sfreq"]
+    
+    if site in ["Zuerich"]:
+        sub_evs[:, 0] = sub_evs[:, 0] + 0.1 * raw.info["sfreq"]
+
+    annot = annotations_from_events(
+                                    events=sub_evs,
+                                    sfreq=raw.info["sfreq"],
+                                    event_desc=mapping,
+                                    orig_time=raw.info["meas_date"]
+                                )
+    raw.set_annotations(annot)
+
+    return raw
+
+
+def add_gpias_annotation(raw, paradigm, site):
+
+
+
+
+
+
+
+
 
 
 
@@ -671,133 +732,3 @@ class DraggableVLine:
 
     def on_release(self, event):
         self.press = False
-
-
-def add_dublin_annotation(raw, paradigm, site):
-
-    event_config = {
-        "omi": {
-            "Austin":    ([2], {2: "Stimulus 4"}, False),
-            "Dublin":    ([4], {4: "Stimulus 4"}, False),
-            "Ghent":     ([1], {1: "Stimulus 4"}, True),
-            "Illinois":  ([1], {1: "Stimulus 4"}, True),
-            "Regensburg":([11], {11: "Stimulus 4"}, True),
-            "Tuebingen": ([215], {215: "Stimulus 4"}, True),
-            "Zuerich":   ([4], {4: "Stimulus 4"}, True),
-        },
-        "xxxxx": {
-            "Austin":    ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, False),
-            "Dublin":    ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, False),
-            "Ghent":     ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
-            "Illinois":  ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
-            "Zuerich":   ([1, 2, 3], {1: "Stimulus 1", 2: "Stimulus 2", 3: "Stimulus 3"}, True),
-            "Regensburg":([14, 13, 12], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
-            "Tuebingen": ([245, 183, 119], {245: "Stimulus 1", 183: "Stimulus 2", 119: "Stimulus 3"}, True),
-        },
-        "xxxxy": {
-            "Austin":    ([1, 2, 3], {1: "Stimulus 11", 2: "Stimulus 12", 3: "Stimulus 13"}, False),
-            "Dublin":    ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, False),
-            "Ghent":     ([1, 2, 3], {1: "Stimulus 11", 2: "Stimulus 12", 3: "Stimulus 13"}, True),
-            "Illinois":  ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, True),
-            "Zuerich":   ([11, 12, 13], {11: "Stimulus 11", 12: "Stimulus 12", 13: "Stimulus 13"}, True),
-            "Regensburg":([14, 13, 12], {14: "Stimulus 1", 13: "Stimulus 2", 12: "Stimulus 3"}, True),
-            "Tuebingen": ([231, 246, 230], {231: "Stimulus 1", 246: "Stimulus 2", 230: "Stimulus 3"}, True),
-        }
-    }
-
-    
-    if site == "Regensburg": 
-        
-        height = 0.001
-        distance = 10
-        threshold = 0.15
-        threshold1 = 0.15
-        threshold2 = 1
-
-        audio_data, times = raw.get_data("audio", return_times=True)
-        peak_idxs, _ = find_peaks(audio_data[0], height=height, distance=distance)
-        stimuli = times[peak_idxs].astype(float)
-
-        split_indices = np.where(np.diff(stimuli) > threshold1)[0] + 1 
-        segments = np.split(stimuli, split_indices)
-        first_elements = np.array([seg[0] for seg in segments if len(seg) > 0])
-        split_indices = np.where(np.diff(first_elements) > threshold2)[0] + 1 
-        segments = np.split(first_elements, split_indices)
-        first_elements = np.array([seg[0] * raw.info["sfreq"] for seg in segments if len(seg) > 0]) # change 0 to -1 to get last trigger
-
-        sub_evs = np.zeros(shape=(len(first_elements), 3), dtype=int)
-        try:
-            sub_evs[:, 0] = first_elements
-        except:
-            warn("There is small mismatch between trigger and stimulus number, so we proceed with triggers ...")
-
-        event_ids, mapping, _ = event_config[paradigm][site]
-        events = events_from_annotations(raw)[0]
-        mask = np.isin(events[:, 2], event_ids)
-        events_sub = events[mask]
-
-        try:
-            sub_evs[:, 2] = events_sub[:, 2]
-        except: # sometimes there are extra triggers (if you see problem here we need to change the ID)
-            threshold = 10
-            time = events_sub[:, 0]
-            ID = events_sub[:, 2]
-            keep = np.ones(len(events_sub), dtype=bool)
-
-            for i in range(1, len(events_sub)):
-                if time[i] - time[i - 1] <= threshold:
-                    if ID[i] == 14:
-                        keep[i] = False 
-                    elif ID[i - 1] == 14:
-                        keep[i - 1] = False
-            events_sub = events_sub[keep]
-            sub_evs[:, 2] = events_sub[:, 2]
-        
-    else:
-        try:
-            event_ids, mapping, use_annotations = event_config[paradigm][site]
-        except KeyError:
-            raise ValueError(f"Unsupported paradigm/site combination: {paradigm}/{site}")
-
-        if use_annotations:
-            events = events_from_annotations(raw)[0]
-        else:
-            events = find_events(raw)
-
-        mask = np.isin(events[:, 2], event_ids)
-        sub_evs = events[mask]
-
-    if paradigm == "omi" and np.count_nonzero(sub_evs[:, 2] == event_ids[0]) != 125:
-        raise ValueError(f"omission paradigm must have 125 events got {len(sub_evs)} instead.")
-
-    if paradigm == "xxxxx":
-        if not np.count_nonzero(sub_evs[:, 2] == event_ids[0]) == 500:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 1 got {np.count_nonzero(sub_evs[:, 2] == event_ids[0])} instead.")
-        if not np.count_nonzero(sub_evs[:, 2] == event_ids[1]) == 75:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 2 got {np.count_nonzero(sub_evs[:, 2] == event_ids[1])} instead.")
-        if not np.count_nonzero(sub_evs[:, 2] == event_ids[2]) == 50:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 3 got {np.count_nonzero(sub_evs[:, 2] == event_ids[2])} instead.")
-        
-    if paradigm == "xxxxy":
-        if not np.count_nonzero(sub_evs[:, 2] == event_ids[0]) == 500:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 11 got {np.count_nonzero(sub_evs[:, 2] == event_ids[0])} instead.")
-        if not np.count_nonzero(sub_evs[:, 2] == event_ids[1]) == 75:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 12 got {np.count_nonzero(sub_evs[:, 2] == event_ids[1])} instead.")
-        if not np.count_nonzero(sub_evs[:, 2] == event_ids[2]) == 50:
-            raise ValueError(f"{paradigm} paradigm must have 500 events with ID 13 got {np.count_nonzero(sub_evs[:, 2] == event_ids[2])} instead.")    
-
-    if site in ["Illinois"]:
-        sub_evs[:, 0] = sub_evs[:, 0] + 0.5 * raw.info["sfreq"]
-    
-    if site in ["Zuerich"]:
-        sub_evs[:, 0] = sub_evs[:, 0] + 0.1 * raw.info["sfreq"]
-
-    annot = annotations_from_events(
-                                    events=sub_evs,
-                                    sfreq=raw.info["sfreq"],
-                                    event_desc=mapping,
-                                    orig_time=raw.info["meas_date"]
-                                )
-    raw.set_annotations(annot)
-
-    return raw
