@@ -102,7 +102,7 @@ class ThresholdPanel(ctk.CTkFrame):
         self.raw.add_channels([stim_raw], force_update_info=True)
 
         events = mne.find_events(self.raw, stim_channel="STI1",
-                                 output="onset", verbose=False)
+                                output="onset", verbose=False)
         return events
 
 
