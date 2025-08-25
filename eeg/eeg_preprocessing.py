@@ -31,13 +31,7 @@ from mne.preprocessing import (ICA,
                                 compute_proj_eog,
                                 find_bad_channels_lof
                                 )
-from .tools import (load_config,
-                    initiate_logging,
-                    _check_preprocessing_inputs,
-                    create_subject_dir,
-                    read_vhdr_input_fname, 
-                    gpias_constants
-                    )
+from .tools import *
 
 def preprocess(
         fname,
@@ -258,7 +252,9 @@ def preprocess(
                     raws = []
                     for f_idx, fname in enumerate(fnames):
                         raw = read_vhdr_input_fname(fname)
-                        raw.annotations.append(onset=0, duration=0, description=f_idx+1)
+                        if paradigm == "gpias":
+                            raw.set_annotations(None)
+                        raw.annotations.append(onset=0, duration=0, description=f"s_{f_idx+1}")
                         raws.append(raw)
                 
                     raw = concatenate_raws(raws)
@@ -491,7 +487,7 @@ def preprocess(
 
 def add_dublin_annotation(raw, paradigm, site):
 
-    with open("../config/dublin_triggers.yaml", "r") as f:
+    with open("./config/dublin_triggers.yaml", "r") as f:
         event_config = yaml.safe_load(f)
 
     try:
@@ -535,12 +531,15 @@ def add_dublin_annotation(raw, paradigm, site):
 
 def add_gpias_annotation(raw, site):
 
+    with open("./config/gpias_triggers.yaml", "r") as f:
+        event_config = yaml.safe_load(f)
     titles = ["pre", "bbn", "3khz", "8khz", "post"]
     
     if site == "Regensburg":
-        events, events_dict = mne.events_from_annotations(raw)
+        events_s, events_dict = events_from_annotations(raw)
         edge_ids = [10002, 10003, 10004, 10005]
-        onsets = {id_: events[events[:, 2] == id_][0][0] / raw.info["sfreq"] for id_ in edge_ids}
+        print(events_s)
+        onsets = {id_: events_s[events_s[:, 2] == id_][0][0] / raw.info["sfreq"] for id_ in edge_ids}
 
         raw_pre   = raw.copy().crop(tmax=onsets[10002])
         raw_bbn   = raw.copy().crop(tmin=onsets[10002], tmax=onsets[10003])
@@ -549,34 +548,19 @@ def add_gpias_annotation(raw, site):
         raw_post  = raw.copy().crop(tmin=onsets[10005])
         raws = [raw_pre, raw_bbn, raw_3, raw_8, raw_post]
 
-        gpias_events_dict, default_thrs = gpias_constants()
-        events_dict = run_multi_threshold_gui(
-                                                raws,
-                                                titles,
-                                                default_thrs[site].values().tolist()
-                                                )
+        events = run_multi_threshold_gui(
+                                        raws,
+                                        titles,
+                                        list(event_config["default_thresholds"][site].values())
+                                        )
+        print(events)
 
-
-
-
-
-
-
-
-
-'''
-    
-            annot_from_events = annotations_from_events(    
-                                                        sub_evs[1:],
-                                                        sfreq=raw.info["sfreq"],
-                                                        event_desc=mapping,
-                                                        orig_time=raw.info["meas_date"]
-                                                        )
-            raw.set_annotations(raw.annotations + annot_from_events)
-
-
-
-
+        annot_from_events = annotations_from_events(    
+                                                    sub_evs[1:],
+                                                    sfreq=raw.info["sfreq"],
+                                                    event_desc=mapping,
+                                                    orig_time=raw.info["meas_date"]
+                                                    )
+        raw.set_annotations(raw.annotations + annot_from_events)
 
     return raw
-'''
