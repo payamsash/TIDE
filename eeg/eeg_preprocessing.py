@@ -291,10 +291,6 @@ def preprocess(
     raw.save(orig_fname, overwrite=True)
     logging.info(f"Raw EEG recording saved in the {str(subject_id)} directory")
         
-    ## if paradigm gpias, we need to extract trig times from audio and save in annotation
-    if paradigm == "gpias":
-        raw = add_gpias_annotation(raw, site)
-
     if paradigm in ["omi", "xxxxx", "xxxxy"]:
         raw = add_dublin_annotation(raw, paradigm, site)
 
@@ -525,42 +521,5 @@ def add_dublin_annotation(raw, paradigm, site):
                                     orig_time=raw.info["meas_date"]
                                 )
     raw.set_annotations(annot)
-
-    return raw
-
-
-def add_gpias_annotation(raw, site):
-
-    with open("./config/gpias_triggers.yaml", "r") as f:
-        event_config = yaml.safe_load(f)
-    titles = ["pre", "bbn", "3khz", "8khz", "post"]
-    
-    if site == "Regensburg":
-        events_s, events_dict = events_from_annotations(raw)
-        edge_ids = [10002, 10003, 10004, 10005]
-        print(events_s)
-        onsets = {id_: events_s[events_s[:, 2] == id_][0][0] / raw.info["sfreq"] for id_ in edge_ids}
-
-        raw_pre   = raw.copy().crop(tmax=onsets[10002])
-        raw_bbn   = raw.copy().crop(tmin=onsets[10002], tmax=onsets[10003])
-        raw_3     = raw.copy().crop(tmin=onsets[10003], tmax=onsets[10004])
-        raw_8     = raw.copy().crop(tmin=onsets[10004], tmax=onsets[10005])
-        raw_post  = raw.copy().crop(tmin=onsets[10005])
-        raws = [raw_pre, raw_bbn, raw_3, raw_8, raw_post]
-
-        events = run_multi_threshold_gui(
-                                        raws,
-                                        titles,
-                                        list(event_config["default_thresholds"][site].values())
-                                        )
-        print(events)
-
-        annot_from_events = annotations_from_events(    
-                                                    sub_evs[1:],
-                                                    sfreq=raw.info["sfreq"],
-                                                    event_desc=mapping,
-                                                    orig_time=raw.info["meas_date"]
-                                                    )
-        raw.set_annotations(raw.annotations + annot_from_events)
 
     return raw
