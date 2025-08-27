@@ -247,7 +247,7 @@ def run_rs_processing(raw, event_ids, logging):
         tmin = 5
         raw.crop(tmin=tmin)
         logging.info(f"{tmin} seconds are cropped from beginning of the data.")
-        epochs_eo = make_fixed_length_epochs(raw, duration=2) 
+        epochs_eo = make_fixed_length_epochs(raw, duration=2, preload=True) 
         epochs_eo.load_data()
         logging.info(f"{len(epochs_eo)} fixed length (2s) eyes-open epochs are created.")
 
@@ -257,7 +257,7 @@ def run_rs_processing(raw, event_ids, logging):
         tmin = max(np.squeeze(events)[-1] / 250 + 3, 5) # 3 seconds skip
         raw.crop(tmin=tmin)
         logging.info(f"{tmin} seconds are cropped from beginning of the data.")
-        epochs_eo = make_fixed_length_epochs(raw, duration=2)
+        epochs_eo = make_fixed_length_epochs(raw, duration=2, preload=True)
         epochs_eo.load_data()
         logging.info(f"{len(epochs_eo)} fixed length (2s) eyes-open epochs are created.")
 
@@ -301,7 +301,8 @@ def run_rs_processing(raw, event_ids, logging):
 
         epochs_ec, epochs_eo = [make_fixed_length_epochs(
                                                         concatenate_raws(raw_e),
-                                                        duration=2
+                                                        duration=2,
+                                                        preload=True
                                                         ) for raw_e in [raws_ec, raws_eo]]
         return [epochs_eo, epochs_ec]
     else:
@@ -329,7 +330,8 @@ def run_erp_processing(raw, logging):
                     tmin=-0.2,
                     tmax=0.5,
                     reject_by_annotation=True,
-                    baseline=baseline
+                    baseline=baseline,
+                    preload=True
                     )
     del raw
     return epochs
