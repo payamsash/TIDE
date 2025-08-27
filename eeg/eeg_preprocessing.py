@@ -217,6 +217,10 @@ def preprocess(
                 raw = read_raw(Path(fname))
                 raw.set_channel_types(ch_types)
                 raw.pick(["eeg", "eog", "ecg", "stim"])
+
+            else:
+                raw = read_raw(Path(fname))
+                montage = make_standard_montage("easycap-M1")
                 
         case ".bdf":
             raw = concatenate_raws([read_raw(fname, exclude=("EXG")) for fname in fnames])
@@ -252,8 +256,6 @@ def preprocess(
                     raws = []
                     for f_idx, fname in enumerate(fnames):
                         raw = read_vhdr_input_fname(fname)
-                        if paradigm == "gpias":
-                            raw.set_annotations(None)
                         raw.annotations.append(onset=0, duration=0, description=f"s_{f_idx+1}")
                         raws.append(raw)
                 
