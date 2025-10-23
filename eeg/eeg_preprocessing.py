@@ -503,7 +503,7 @@ def add_dublin_annotation(raw, paradigm, site):
     expected_counts = {
                         "omi": {0: 125},                      
                         "xxxxx": {0: 500, 1: 75, 2: 50},      
-                        "xxxxy": {0: 500, 1: 75, 2: 50}, 
+                        "xxxxy": {0: 500, 1: 75, 2: 50},
                         }
     for idx, expected in expected_counts[paradigm].items():
         actual = np.count_nonzero(sub_evs[:, 2] == event_ids[idx])
