@@ -54,10 +54,31 @@ class ThresholdPanel(ctk.CTkFrame):
             slider.set(val)
             slider.pack(side="left", padx=2)
 
-            lbl = ctk.CTkLabel(frame, text=f"{val:.1f}")   # live value only
-            lbl.pack(side="left", padx=2)
+            
+            # lbl = ctk.CTkLabel(frame, text=f"{val:.1f}")   # live value only
+            # lbl.pack(side="left", padx=2)
 
-            slider.configure(command=lambda v, l=lbl: l.configure(text=f"{float(v):.1f}"))
+            # slider.configure(command=lambda v, l=lbl: l.configure(text=f"{float(v):.1f}"))
+            # self.sliders.append(slider)
+
+            entry = ctk.CTkEntry(frame, width=50)
+            entry.insert(0, f"{val:.3f}")
+            entry.pack(side="left", padx=2)
+
+            def on_slider_change(v, e=entry):
+                e.delete(0, "end")
+                e.insert(0, f"{float(v):.5f}")
+
+            def on_entry_change(event, s=slider):
+                try:
+                    val = float(event.widget.get())
+                    s.set(val)
+                except ValueError:
+                    pass  # ignore invalid input
+
+            slider.configure(command=lambda v: on_slider_change(v))
+            entry.bind("<Return>", on_entry_change)  # update slider on Enter key
+
             self.sliders.append(slider)
 
         # make textbox taller so no scrolling needed
@@ -283,10 +304,13 @@ def main():
                 except: 
                     print("probably this data is old recording from Regensburg")
                 raw.pick(["eeg", "stim"])
+                raw.filter(h_freq=5, picks="stim")
 
     titles = ["pre", "bbn", "3khz", "8khz", "post"]
+    ## this dictionary is just a default for regensburg site (majority of subjects)
+    ## you should adjust in based on your need (only affects Tuebingen, Regensburg and Zuerich)
     my_dict = {
-                                "pre": [0.003, 0.01, 0.017, 0.02185, 0.0285],
+                                "pre": [0.003, 0.01, 0.017, 0.02185, 0.0285], # 0.0224 0.029
                                 "bbn": [0.005, 0.015, 0.021, 0.026],
                                 "3kHz": [0.005, 0.015, 0.021, 0.026],
                                 "8kHz": [0.005, 0.015, 0.021, 0.026],
