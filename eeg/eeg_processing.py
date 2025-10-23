@@ -239,8 +239,6 @@ def run_rs_processing(raw, event_ids, logging):
     except:
         events = find_events(raw) # probably for dublin
 
-    print(events)
-
     if len(events) == 0:
         logging.info("This recording is only eyes open or eyes closed.")
         both_conditions = False
@@ -254,7 +252,7 @@ def run_rs_processing(raw, event_ids, logging):
     elif len(events) < 4:
         logging.info("This recording is only eyes open or eyes closed.")
         both_conditions = False
-        tmin = max(np.squeeze(events)[-1] / 250 + 3, 5) # 3 seconds skip
+        tmin = max(np.squeeze(events)[0] / 250 + 3, 5) # 3 seconds skip # changed -1 to 0
         raw.crop(tmin=tmin)
         logging.info(f"{tmin} seconds are cropped from beginning of the data.")
         epochs_eo = make_fixed_length_epochs(raw, duration=2, preload=True)
