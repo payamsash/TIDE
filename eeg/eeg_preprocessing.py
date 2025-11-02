@@ -512,6 +512,9 @@ def add_dublin_annotation(raw, paradigm, site):
 
     if site in ["Illinois"]:
         sub_evs[:, 0] = sub_evs[:, 0] + 0.5 * raw.info["sfreq"]
+
+    if site in ["Austin"]:
+        sub_evs[:, 0] = sub_evs[:, 0] + 0.5 * raw.info["sfreq"] # austin trigger fix
     
     if site in ["Zuerich"]:
         sub_evs[:, 0] = sub_evs[:, 0] + 0.1 * raw.info["sfreq"]
