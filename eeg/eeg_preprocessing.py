@@ -190,7 +190,7 @@ def preprocess(
                 raw.drop_channels(ch_names="VREF")
                 montage = make_standard_montage("GSN-HydroCel-64_1.0")
 
-            if site == "Zuerich":
+            elif site == "Zuerich":
                 montage = make_standard_montage("easycap-M1")
 
                 if subject_id in [70001, 70002, 70003, 70007, 70009, 70030, 70042, 70052]: # old recordings
