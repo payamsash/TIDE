@@ -3,12 +3,8 @@
 
 import os
 from pathlib import Path
-import time
 import random
 import numpy as np
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-from scipy.signal import find_peaks
 
 from autoreject import AutoReject
 from pyriemann.clustering import Potato
@@ -20,7 +16,6 @@ from mne.datasets import fetch_fsaverage
 from mne.minimum_norm import make_inverse_operator, write_inverse_operator
 from mne import (set_log_level,
                 events_from_annotations,
-                annotations_from_events,
                 find_events,
                 Epochs,
                 concatenate_raws,
@@ -237,7 +232,10 @@ def run_rs_processing(raw, event_ids, logging):
     try:
         events, events_dict = events_from_annotations(raw)
     except:
-        events = find_events(raw) # probably for dublin
+        if raw.info["experimenter"] == "dublin":
+            events = find_events(raw) # probably for dublin
+        else:
+            events = []
 
     if len(events) == 0:
         logging.info("This recording is only eyes open or eyes closed.")
