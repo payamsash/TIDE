@@ -42,19 +42,16 @@ techniques.
 
 ## Project Structure
 ```plaintext
-.
-├── assets
-│   ├── fonts                   # Font files for visuals
-│   └── images                  # Images used in visuals
-├── docs                        # Documentation and project information
-├── examples                    # Example scripts for using the library
+├── config                      # Config files to customize 
+├── eeg
+│   ├── eeg_preprocessing.py           
+│   ├── eeg_processing.py
+│   ├── eeg_features_extraction.py  
 ├── src
 │   ├── preprocess.py           
 │   ├── process.py
 │   ├── extract_features.py     
-├── ml                          # Machine learning stuff
 ├── venv                        # Virtual environment for the project
-└── config                      # Config files to customize processing
 ```
 
 ## Installation and Basic Usage
@@ -71,7 +68,7 @@ techniques.
 
 3. Navigate to the project directory and install dependencies:
     ```bash
-    cd rspv
+    cd TIDE
     pip install -r requirements.txt
     ```
 
