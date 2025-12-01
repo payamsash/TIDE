@@ -337,7 +337,7 @@ def extract_eeg_features(
 
         logging.info(f"Feature extraction finished without an error!")
 
-    if paradigm == "gpias":
+    if paradigm in ["omi", "xxxxx", "xxxxy", "gpias"]:
         ep_fname = subject_dir / "epochs" / f"epochs-{paradigm}.fif"
         epochs = read_epochs(ep_fname, preload=True)
         epochs.pick(picks="eeg")
@@ -428,8 +428,8 @@ def extract_eeg_features(
         df["area_ratio"] = df["P200_auc"] / df["N100_auc"]
         df["N100_P200_gap"] = df["P200_lat"] - df["N100_lat"]
 
-        zip_fname = subject_dir / "features" / f"features_gpias.zip"
-        csv_fname = subject_dir / "features" / f"features_gpias.csv"
+        zip_fname = subject_dir / "features" / f"features_{paradigm}.zip"
+        csv_fname = subject_dir / "features" / f"features_{paradigm}.csv"
         
         df.to_csv(csv_fname)
         with zipfile.ZipFile(zip_fname, "w", zipfile.ZIP_DEFLATED) as zipf:
