@@ -380,16 +380,25 @@ def extract_eeg_features(
             tmin_p50, tmax_p50 = p50_window[0] * 1e-3, p50_window[1] * 1e-3
 
             ev_data = ev.get_data(tmin=tmin_n1, tmax=tmax_n1) 
-            n1_amp = np.max(ev_data, axis=-1)
-            n1_lat = np.argmax(ev_data, axis=-1) * 4 + tmin_n1 * 1e3 ## 4 comes from sfreq
+            #n1_amp = np.max(ev_data, axis=-1)
+            #n1_lat = np.argmax(ev_data, axis=-1) * 4 + tmin_n1 * 1e3 ## 4 comes from sfreq
+            n1_idx = np.argmax(np.abs(ev_data),axis=-1)
+            n1_amp = ev_data[np.arange(ev_data.shape[0]),n1_idx]
+            n1_lat = np.argmax(np.abs(ev_data),axis=-1)* 4 + tmin_n1 * 1e3 
 
             ev_data = ev.get_data(tmin=tmin_p2, tmax=tmax_p2)
-            p2_amp = np.max(ev_data, axis=-1)
-            p2_lat = np.argmax(ev_data, axis=-1) * 4 + tmin_p2 * 1e3 ## 4 comes from sfreq
+            #p2_amp = np.max(ev_data, axis=-1)
+            #p2_lat = np.argmax(ev_data, axis=-1) * 4 + tmin_p2 * 1e3 ## 4 comes from sfreq
+            p2_idx = np.argmax(np.abs(ev_data),axis=-1)
+            p2_amp = ev_data[np.arange(ev_data.shape[0]),p2_idx]
+            p2_lat = np.argmax(np.abs(ev_data),axis=-1)* 4 + tmin_p2 * 1e3
 
             ev_data = ev.get_data(tmin=tmin_p50, tmax=tmax_p50) 
-            p50_amp = np.max(ev_data, axis=-1)
-            p50_lat = np.argmax(ev_data, axis=-1) * 4 + tmin_p50 * 1e3 ## 4 comes from sfreq
+            #p50_amp = np.max(ev_data, axis=-1)
+            #p50_lat = np.argmax(ev_data, axis=-1) * 4 + tmin_p50 * 1e3 ## 4 comes from sfreq
+            p50_idx = np.argmax(np.abs(ev_data),axis=-1)
+            p50_amp = ev_data[np.arange(ev_data.shape[0]),p50_idx]
+            p50_lat = np.argmax(np.abs(ev_data),axis=-1)* 4 + tmin_p50* 1e3 
 
             ## compute AUC
             tmin_auc = (n1_lat[cz_index] - window_len) * 1e-3
