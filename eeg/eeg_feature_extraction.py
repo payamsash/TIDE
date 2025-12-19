@@ -72,8 +72,8 @@ def extract_eeg_features(
     if not isinstance(subject_id, str): raise TypeError(f"subject_id must be str, got type {type(subject_id).__name} instead.")
     if not isinstance(subjects_dir, (str, Path)): raise TypeError(f"subjects_dir must be str or Path object, got type {type(subjects_dir).__name} instead.")
     subject_dir = Path(subjects_dir) / subject_id
-    if paradigm not in ["rest", "gpias"]:
-        raise ValueError(f"paradigm must be one of the rest or gpias, but got {paradigm} instead.")
+    if paradigm not in ["rest", "gpias", "omi", "xxxxx", "xxxxy"]:
+        raise ValueError(f"paradigm must be one of the rest or gpias or dublin, but got {paradigm} instead.")
 
     if paradigm == "rest":
         ep_fname = subject_dir / "epochs" / f"epochs-{paradigm}-eo.fif"
