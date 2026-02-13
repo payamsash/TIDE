@@ -365,17 +365,24 @@ def extract_eeg_features(
         stim_ids = list(epochs.event_id.keys())
         ch_names = epochs.info["ch_names"]
         cz_index = ch_names.index("Cz")
+        
+        if paradigm in ["omi", "xxxxx", "xxxxy"]:
+            n1_window_center = 1300 # 1200 + 100
+        else: 
+            n1_window_center = 100 # 0 + 100
+
+        p2_window_center = n1_window_center + 100
+        p50_window_center = n1_window_center - 50
 
         window_len = 20
-        ni_window = [100 - window_len, 100 + window_len]
-        p2_window = [200 - window_len, 200 + window_len]
-        p50_window = [50 - window_len / 2, 50 + window_len / 2]
-
+        n1_window = [n1_window_center - window_len, n1_window_center + window_len]
+        p2_window = [p2_window_center - window_len, p2_window_center + window_len]
+        p50_window = [p50_window_center - window_len / 2, p50_window_center + window_len / 2]
 
         for stim_id in stim_ids:
             ev = epochs[stim_id].average()
 
-            tmin_n1, tmax_n1 = ni_window[0] * 1e-3, ni_window[1] * 1e-3
+            tmin_n1, tmax_n1 = n1_window[0] * 1e-3, n1_window[1] * 1e-3
             tmin_p2, tmax_p2 = p2_window[0] * 1e-3, p2_window[1] * 1e-3
             tmin_p50, tmax_p50 = p50_window[0] * 1e-3, p50_window[1] * 1e-3
 
