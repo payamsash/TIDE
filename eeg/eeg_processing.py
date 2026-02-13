@@ -170,7 +170,7 @@ def process(
             logging.info(f"Eyes open epochs are saved.")
 
     else:
-        epochs = run_erp_processing(raw, logging)
+        epochs = run_erp_processing(raw, paradigm, logging)
         if manual_data_scroll:
             epochs.plot(n_channels=80, picks="eeg", scalings=dict(eeg=50e-6), block=True)
             if len(epochs.info["bads"]) > 0:
@@ -305,7 +305,7 @@ def run_rs_processing(raw, event_ids, logging):
         return [epochs_eo]
 
 
-def run_erp_processing(raw, logging):
+def run_erp_processing(raw, paradigm, logging):
     
     match raw.info["description"]:
         case "gpias":
@@ -315,11 +315,16 @@ def run_erp_processing(raw, logging):
 
     events, event_ids = events_from_annotations(raw)
     logging.info("Creating epochs...")
+    if paradigm in ["omi", "xxxxx", "xxxxy"]: # make longer epochs
+        tmin, tmax = -0.5, 1.8
+    else:
+        tmin, tmax = -0.2, 0.5
+  
     epochs = Epochs(raw=raw,
                     events=events,
                     event_id=event_ids,
-                    tmin=-0.2,
-                    tmax=0.5,
+                    tmin=tmin,
+                    tmax=tmax,
                     reject_by_annotation=True,
                     baseline=baseline,
                     preload=True
